@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+# =============================================================================
+#  run — venv bootstrap facade
+#  why: guarantee an isolated, reproducible interpreter before any project code
+#  runs; all business logic lives in src/main.py, never here
+# =============================================================================
+import hashlib
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+VENV = ROOT / ".venv"
+PYTHON = VENV / "bin" / "python"
+
+
+def base_python() -> str:
+    for candidate in ("/opt/homebrew/bin/python3.12", "/opt/homebrew/bin/python3.13"):
+        if Path(candidate).exists():
+            return candidate
+    return sys.executable
+
+
+def ensure_venv() -> None:
+    if not PYTHON.exists():
+        subprocess.run([base_python(), "-m", "venv", str(VENV)], check=True)
+        subprocess.run([str(PYTHON), "-m", "pip", "install", "--upgrade", "pip", "-q"], check=True)
+    marker = VENV / ".requirements.sha"
+    digest = hashlib.sha256((ROOT / "requirements.txt").read_bytes()).hexdigest()
+    if not marker.exists() or marker.read_text().strip() != digest:
+        subprocess.run([str(PYTHON), "-m", "pip", "install", "-q", "-r", str(ROOT / "requirements.txt")], check=True)
+        marker.write_text(digest)
+
+
+def main() -> None:
+    ensure_venv()
+    os.chdir(ROOT)
+    os.execv(str(PYTHON), [str(PYTHON), str(ROOT / "src" / "main.py"), *sys.argv[1:]])
+
+
+main()
