@@ -6,6 +6,14 @@ target-version = "py312"
 testpaths = ["src"]
 pythonpath = ["src"]
 addopts = "-q -p no:cacheprovider"
+# warnings are errors; the three ignores are upstream swig-generated import
+# noise (sentencepiece C extension) that no code in this repo can fix
+filterwarnings = [
+    "error",
+    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+]
 
 [tool.pyright]
 extraPaths = ["src"]

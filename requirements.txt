@@ -1,5 +1,6 @@
 mlx>=0.31.2
 mlx-lm>=0.31.3
+transformers==5.0.0
 fastapi>=0.115
 uvicorn>=0.34
 httpx>=0.28
