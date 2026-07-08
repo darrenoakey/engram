@@ -30,6 +30,17 @@ def command_status(args) -> int:
     return show_status(args)
 
 
+def command_proof(args) -> int:
+    from common.config import load_config
+    from common.identity import get_or_create_token
+    from evaluation import proof
+
+    config = load_config()
+    url = args.url or f"http://{config.server.host}:{config.server.port}"
+    result = proof.run_proof(url, get_or_create_token(), rounds=args.rounds)
+    return 0 if result.passed else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="engram", description="self-modifying local inference engine")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -38,12 +49,15 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--model", default=None, help="override serving model path")
     status = sub.add_parser("status", help="show live brain status")
     status.add_argument("--json", action="store_true")
+    proof_cmd = sub.add_parser("proof", help="run the end-to-end proof of life against the live service")
+    proof_cmd.add_argument("--url", default=None, help="engram base url (default from config host/port)")
+    proof_cmd.add_argument("--rounds", type=int, default=6, help="reward rounds per phase")
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
-    handlers = {"check": command_check, "serve": command_serve, "status": command_status}
+    handlers = {"check": command_check, "serve": command_serve, "status": command_status, "proof": command_proof}
     sys.exit(handlers[args.command](args))
 
 
