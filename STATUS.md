@@ -41,14 +41,20 @@ reasoning-only turns, spurious canary rollbacks, and learning lost on restart. S
 | `server/` (openai_api, feedback_api, brain_api, work_queue, app, client) | 6 | 26 | ✅ committed `9c77872` |
 | `evaluation/proof` (E2E demonstration) | 1 | 3 (in eval count) | ✅ committed `9fbdf45` |
 
-### Next major phase: ambient self-individuation (designed, not built)
-The reward loop above is the *behaviour* half of "interaction changes the model." The *knowledge*
-half — engram progressively becoming an individual tailored to its user, from ordinary unlabelled
-use, learning their facts/preferences into the weights (not RAG, not lookup) — is designed in
-**INDIVIDUATION.md** (a 5-seat council converged on it). Core: train on the USER's tokens (never
-the model's own → no collapse), a surprise gate, a volatile overlay by day + a guarded nightly
-"dream" that corroborates → self-edits → consolidates into the base, and a growing individuation
-probe that fixes the base-canary's blind spot. Awaiting review before implementation.
+### Ambient self-individuation: SHIPPED and PROVEN on the 9B (INDIVIDUATION.md)
+The *knowledge* half of "interaction changes the model" is built and live. From ordinary
+unlabelled use — no commands, no explicit teaching — engram absorbs its user into the weights:
+a peak-surprise gate picks turns worth learning (training on the USER's tokens, never its own →
+collapse-proof), a volatile overlay absorbs by day, and a guarded `/v1/brain/dream` corroborates
+durable facts, self-edits them into assistant-knowledge, absorbs them, and health-gates the night
+(commit or revert). **Proven live:** told "I'm allergic to shellfish" / "My name is Darren" once
+in chat, a fresh empty-context session recalls *shellfish* and *Darren*; a one-off role-play is
+dropped, not persisted. New `src/individuation/` package + wiring; ~150 tests green. The honest
+frontier (§14): the 9B's "I'm stateless" reasoning fights absorbed facts — v1 crosses it for clear
+personal facts with stronger consolidation; robustly overriding it for arbitrary knowledge is the
+targeted-editing stage (v2). Live tuning in gitignored `local/config.toml`.
+
+### Original next steps (still open)
 
 ### Remaining / optional next steps
 - **Consolidation on the 9B**: exercise a real `/v1/brain/consolidate` (heavy: dequantize-merge-

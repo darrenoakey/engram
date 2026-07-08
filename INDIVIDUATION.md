@@ -74,14 +74,18 @@ council landed on (Architect's split, adopting the Contrarian's surprise gate).
 
 For each completed turn, on the user's most recent message `U = (u_1 … u_m)` in context `C`:
 
-**4.1 Surprise gate.** Compute the model's surprise as the mean cross-entropy it assigns to the
-user's actual message:
+**4.1 Surprise gate.** Compute the model's surprise on the user's actual message as a PEAK
+aggregate — the mean of the most-surprising quarter of its tokens:
 
 ```
-surprise(U | C) = − (1/m) Σ_t log p_θ(u_t | C, u_<t)
+peak_surprise(U | C) = mean of the top-25% of { − log p_θ(u_t | C, u_<t) }
 ```
 
-This forward pass is nearly free (it overlaps the normal prefill of the next turn). Gate:
+This is a live-9B correction to the original design (which used the flat mean). Mean per-token
+cross-entropy is the WRONG signal: a fluent factual sentence ("I'm allergic to shellfish") is
+linguistically predictable token-to-token, so its mean surprise is LOWER than a terse "ok", and a
+gate warmed on chatter never fires on real facts. The peak tracks the novel content token
+("shellfish") that a flat average washes out. This forward is nearly free. Gate:
 
 - `surprise ≤ τ` → the model already predicts this user → **do nothing** (skips the ~95% of
   turns that carry no individuating signal, per the Contrarian).
@@ -248,3 +252,32 @@ on the live 9B, all of the following hold with real numbers:
 - **v2:** targeted model editing (the user's stated later direction) — locate-and-edit the specific
   weights for a corroborated fact, using this doc's "corroborate → verify cold → accept or revert"
   discipline as the safety envelope. The wake/sleep + provenance spine is exactly the on-ramp.
+
+## 14. v1 live results and findings (proven on the 9B)
+
+Told "I'm allergic to shellfish" and "My name is Darren" ONCE each in ordinary conversation
+(no commands), then in a fresh, empty-context session engram recalled **shellfish** and **Darren**
+— cold, from the weights. The dream corroborated both as durable facts, and a one-off
+"pretend you're a pirate" was dropped (0 learned, 2 dropped), never persisting. Health-gated
+(probe recall 1.0 ≥ 0.5; sycophancy 0.0; entropy in band). Every acceptance criterion in §12 met.
+
+Findings that shaped the tuning (all discovered on the live 9B, none reproducible on the 0.8B):
+
+- **The reasoning-override barrier (the frontier).** A gentle single-pass absorb shifts the
+  next-token prior — a *thinking-off* direct answer recalls the fact — but the 9B's RL-trained
+  "I'm a stateless assistant, I don't know personal facts" reasoning actively talks itself out of
+  the recall in normal (thinking-on) serving: it reasons "no, I am a stateless model." Making the
+  fact *win* against that prior took stronger consolidation (`lr_absorb` 2e-5, 8 self-edit
+  paraphrases, `dream_epochs` 2). This is precisely the knowledge-editing frontier the user flagged
+  for a later stage — v1 crosses it for clear personal facts; robustly overriding a strong reasoning
+  prior for arbitrary knowledge is v2's targeted-editing work.
+- **Recall strength vs. collapse is a real tension.** The settings that make recall reliable drive
+  the neutral-prompt entropy down (≈3.0 → ≈1.4), toward an overconfident peak. The entropy sentinel
+  originally guarded only the ceiling (runaway randomness); over-training collapses entropy
+  *downward*, so a floor was added. The dream health-gate now refuses a night that peaks the model
+  too hard — the correct fail-closed behavior, and the knob that keeps aggressive absorption honest.
+- **The gate is a cheap pre-filter; the classifier is the real selector.** Per-token surprise (even
+  peak) cannot rank "informative fact" above "terse chatter" perfectly; the durability classifier in
+  the dream is what actually keeps facts and drops role-play/hypotheticals/transient commands.
+
+Live tuning lives in `local/config.toml` (gitignored); the code defaults stay gentle for tests.
