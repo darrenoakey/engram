@@ -41,6 +41,15 @@ reasoning-only turns, spurious canary rollbacks, and learning lost on restart. S
 | `server/` (openai_api, feedback_api, brain_api, work_queue, app, client) | 6 | 26 | ✅ committed `9c77872` |
 | `evaluation/proof` (E2E demonstration) | 1 | 3 (in eval count) | ✅ committed `9fbdf45` |
 
+### Next major phase: ambient self-individuation (designed, not built)
+The reward loop above is the *behaviour* half of "interaction changes the model." The *knowledge*
+half — engram progressively becoming an individual tailored to its user, from ordinary unlabelled
+use, learning their facts/preferences into the weights (not RAG, not lookup) — is designed in
+**INDIVIDUATION.md** (a 5-seat council converged on it). Core: train on the USER's tokens (never
+the model's own → no collapse), a surprise gate, a volatile overlay by day + a guarded nightly
+"dream" that corroborates → self-edits → consolidates into the base, and a growing individuation
+probe that fixes the base-canary's blind spot. Awaiting review before implementation.
+
 ### Remaining / optional next steps
 - **Consolidation on the 9B**: exercise a real `/v1/brain/consolidate` (heavy: dequantize-merge-
   requant the 18.8GB master; canary-gated with auto-revert), then confirm the swapped generation
