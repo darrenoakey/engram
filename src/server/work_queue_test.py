@@ -137,6 +137,22 @@ def _attempts(state) -> int:
 
 
 # ##################################################################
+# a direct absorb job carries its OWN token_ids + span (the user's tokens) rather
+# than a trace of the model's output — the worker trains on it without a trace load
+def test_direct_absorb_job_trains_on_supplied_span(server):
+    state = server.state
+    trace_id = _new_trace(server)
+    _await_idle(state.queue)
+    token_ids = Trace.load(trace_id).token_ids
+    end = min(len(token_ids), 12)
+    before = state.queue.accepted_updates
+    state.queue.enqueue({"kind": "absorb", "token_ids": token_ids, "gen_start": 1,
+                         "credit_spans": [(1, end)], "reward": 1.0, "source": "test"})
+    _wait(lambda: state.queue.accepted_updates > before)
+    assert state.journal.stats()["counts"].get("update", 0) >= 1
+
+
+# ##################################################################
 # with include_think_tokens off, a reasoning-only turn (no answer/tool_call span)
 # still credits the think span — a reward must never be silently wasted
 def test_credit_spans_falls_back_to_think_when_no_answer():

@@ -146,6 +146,9 @@ class WorkQueue:
     # skipped_update, never silently dropped — a lost reward that leaves no record
     # would hang any caller draining the queue and hide feedback that did nothing
     def _process(self, job: dict) -> None:
+        if "token_ids" in job:
+            self._process_direct(job)
+            return
         trace = Trace.load(job["trace_id"])
         credit_spans = self._credit_spans(trace)
         if not credit_spans:
@@ -159,6 +162,22 @@ class WorkQueue:
             )
         if report.accepted:
             self._after_accept(trace, credit_spans, report, job)
+
+    # ##################################################################
+    # process direct
+    # an absorb job carries its own token_ids + credit span (the USER's tokens,
+    # or a self-edit answer span) rather than a trace of the model's own output —
+    # this is how engram trains on what the user said, not on what it replied
+    def _process_direct(self, job: dict) -> None:
+        with self.state.host.gpu_lock:
+            report = self.state.updater.apply(
+                self.state.host.model, self.state.overlay, job["token_ids"], job["gen_start"],
+                job["credit_spans"], job["reward"], job["kind"], self.state.replay, self.state.journal,
+            )
+        if report.accepted:
+            self.accepted_updates += 1
+            self.state.pause_flag.check(self.state.overlay.total_norm(),
+                                        self.state.config.plasticity.adapter_norm_ceiling)
 
     # ##################################################################
     # credit spans
