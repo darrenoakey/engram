@@ -67,12 +67,21 @@ def _sampling(config, body: dict):
 def _complete(state, body: dict, sampling):
     state.in_flight.enter()
     try:
-        trace = state.host.generate(body.get("messages", []), body.get("tools"), sampling)
+        trace = state.host.generate(body.get("messages", []), body.get("tools"), sampling, None, _thinking(body))
         reasoning, content, tool_calls = finalize_trace(state, trace, body.get("messages", []))
     finally:
         state.in_flight.leave()
     payload = _completion_body(trace, reasoning, content, tool_calls)
     return JSONResponse(payload, headers={"X-Engram-Trace": trace.trace_id})
+
+
+# ##################################################################
+# thinking
+# whether to let the model reason before answering; a chat UI turns it off for
+# snappy direct replies (default on preserves the agentic/reasoning behaviour)
+def _thinking(body: dict) -> bool:
+    value = body.get("enable_thinking")
+    return True if value is None else bool(value)
 
 
 # ##################################################################
@@ -193,7 +202,7 @@ def _completion_body(trace: Trace, reasoning: str, content: str, tool_calls: lis
 def _sse_generator(state, body: dict, sampling):
     state.in_flight.enter()
     try:
-        trace = state.host.generate(body.get("messages", []), body.get("tools"), sampling)
+        trace = state.host.generate(body.get("messages", []), body.get("tools"), sampling, None, _thinking(body))
         reasoning, content, tool_calls = finalize_trace(state, trace, body.get("messages", []))
         yield from _replay_stream(trace, reasoning, content, tool_calls)
     finally:

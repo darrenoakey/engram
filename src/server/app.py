@@ -29,7 +29,7 @@ from plasticity.updater import Updater
 from individuation.experience import ExperienceLog
 from individuation.probe import IndividuationProbe
 from individuation.surprise import SurpriseGate
-from server import brain_api, feedback_api, openai_api
+from server import brain_api, feedback_api, openai_api, ui
 from server.work_queue import InFlight, WorkQueue, canary_enabled, materialize
 
 POINTER_NAME = "current_base.json"
@@ -184,6 +184,7 @@ def create_app(config=None, model_path=None, journal=None, checkpoints=None, rep
     app.include_router(openai_api.router)
     app.include_router(feedback_api.router)
     app.include_router(brain_api.router)
+    app.include_router(ui.router)
     return app
 
 
