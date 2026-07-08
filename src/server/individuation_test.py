@@ -75,7 +75,7 @@ def _wait(predicate, timeout: float = 90.0) -> None:
 
 
 def _experiences(server) -> int:
-    return httpx.get(f"{server.url}/v1/brain", timeout=30).json()["individuation"]["experiences"]
+    return httpx.get(f"{server.url}/v1/brain", timeout=30).json()["individuation"]["noted"]
 
 
 # ##################################################################

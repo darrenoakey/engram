@@ -62,3 +62,18 @@ def test_thinking_off_answers_without_a_reasoning_span(server):
     message = data["choices"][0]["message"]
     assert not message.get("reasoning_content")
     assert (message.get("content") or "").strip()
+
+
+def test_memory_endpoint_reports_learned_and_noted(server):
+    data = httpx.get(f"{server.url}/v1/brain/memory", timeout=30).json()
+    assert "learned" in data and isinstance(data["learned"], list)
+    assert "noted" in data and isinstance(data["noted"], int)
+
+
+def test_verify_requires_auth_but_page_cookie_authorises(server):
+    assert httpx.post(f"{server.url}/v1/brain/verify", timeout=60).status_code == 401
+    with httpx.Client(base_url=server.url, timeout=120) as client:
+        assert client.get("/").status_code == 200                      # sets the httpOnly token cookie
+        report = client.post("/v1/brain/verify")
+        assert report.status_code == 200
+        assert "recall" in report.json() and "items" in report.json()

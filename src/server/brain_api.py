@@ -138,19 +138,45 @@ def _individuation_stats(state) -> dict:
     unconsolidated = sum(1 for exp in experiences if not exp.consolidated)
     return {
         "enabled": state.config.individuation.enabled,
-        "experiences": len(experiences),
-        "unconsolidated": unconsolidated,
+        "noted": len(experiences),          # turns the surprise gate flagged (NOT yet learned)
+        "learned": len(state.individuation_probe.all()),  # facts a dream consolidated + verified
+        "unconsolidated": unconsolidated,   # noted but not yet run through a dream
         "surprise_threshold": state.surprise_gate.threshold(),
-        "probes": len(state.individuation_probe.all()),
     }
 
 
 # ##################################################################
+# brain memory
+# the facts engram has actually LEARNED — each carries the cold-recall question a
+# dream verified it against. Read-only, so the chat UI can show what it knows
+@router.get("/v1/brain/memory")
+def brain_memory(request: Request) -> dict:
+    state = request.app.state.engram
+    facts = [{"question": p.question, "recall_word": p.expect} for p in state.individuation_probe.all()]
+    return {"learned": facts, "noted": len(state.experience_log.all())}
+
+
+# ##################################################################
+# brain verify
+# PROVE it learned: re-run every consolidated fact's cold-recall probe live and
+# report which the model currently recalls. This is the honest "did it stick" check
+@router.post("/v1/brain/verify")
+def brain_verify(request: Request) -> dict:
+    state = request.app.state.engram
+    _require_token(request, state)
+    report = state.individuation_probe.run(state.host)
+    items = [{"question": i["question"], "recall_word": i["expect"], "recalled": bool(i["ok"])}
+             for i in report.per_item]
+    return {"recall": report.recall, "count": report.count, "items": items}
+
+
+# ##################################################################
 # require token
-# every mutating brain operation needs the exact bearer token
+# every mutating brain operation needs the exact bearer token, accepted as a
+# Bearer header OR the same-origin cookie the chat page carries (localhost UI)
 def _require_token(request: Request, state) -> None:
     header = request.headers.get("authorization", "")
-    token = header[7:] if header.startswith("Bearer ") else None
+    token = header[7:] if header.startswith("Bearer ") else request.cookies.get("engram_token")
     if token != state.token:
         raise HTTPException(401, "invalid or missing bearer token")
 
