@@ -18,6 +18,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from engine import tool_parser
 from engine.trace import Trace
+from individuation import surprise
+from individuation.experience import context_digest
 
 router = APIRouter()
 MODEL_ID = "engram/ornith-9b"
@@ -66,7 +68,7 @@ def _complete(state, body: dict, sampling):
     state.in_flight.enter()
     try:
         trace = state.host.generate(body.get("messages", []), body.get("tools"), sampling)
-        reasoning, content, tool_calls = finalize_trace(state, trace)
+        reasoning, content, tool_calls = finalize_trace(state, trace, body.get("messages", []))
     finally:
         state.in_flight.leave()
     payload = _completion_body(trace, reasoning, content, tool_calls)
@@ -77,7 +79,7 @@ def _complete(state, body: dict, sampling):
 # finalize trace
 # decode reasoning/answer/tool_calls, persist the trace with its call-id map,
 # register the calls for later scoring, and enqueue always-on self-reinforcement
-def finalize_trace(state, trace: Trace):
+def finalize_trace(state, trace: Trace, messages: list):
     reasoning = _decode_kind(state, trace, "think")
     content = _decode_kind(state, trace, "answer")
     tool_calls = _extract_tool_calls(state, trace)
@@ -85,7 +87,37 @@ def finalize_trace(state, trace: Trace):
     _register_calls(state, trace, tool_calls)
     if state.config.plasticity.self_reinforce == "always":
         _enqueue(state, trace.trace_id, 0.0, "reinforce", "self_reinforce")
+    _consider_absorb(state, messages)
     return reasoning, content, tool_calls
+
+
+# ##################################################################
+# consider absorb
+# the individuation seam: enqueue this turn's user message for the surprise gate.
+# only cheap chat-template work happens here (no forward) so the response path
+# stays fast; the worker scores surprise, gates, logs, and absorbs off-path
+def _consider_absorb(state, messages: list) -> None:
+    if not state.config.individuation.enabled:
+        return
+    packed = surprise.user_message_tokens(state.host, messages)
+    if packed is None:
+        return
+    full, (start, end) = packed
+    state.queue.enqueue({
+        "kind": "absorb_candidate", "token_ids": full, "gen_start": start, "credit_spans": [(start, end)],
+        "user_text": _last_user_text(messages), "context_digest": context_digest(messages[:-1]),
+        "source": "individuation",
+    })
+
+
+# ##################################################################
+# last user text
+# the content of the latest user message, the human text an experience records
+def _last_user_text(messages: list) -> str:
+    for message in reversed(messages):
+        if isinstance(message, dict) and message.get("role") == "user":
+            return str(message.get("content", ""))
+    return ""
 
 
 # ##################################################################
@@ -162,7 +194,7 @@ def _sse_generator(state, body: dict, sampling):
     state.in_flight.enter()
     try:
         trace = state.host.generate(body.get("messages", []), body.get("tools"), sampling)
-        reasoning, content, tool_calls = finalize_trace(state, trace)
+        reasoning, content, tool_calls = finalize_trace(state, trace, body.get("messages", []))
         yield from _replay_stream(trace, reasoning, content, tool_calls)
     finally:
         state.in_flight.leave()

@@ -26,6 +26,9 @@ from plasticity.guards import PauseFlag
 from plasticity.journal import Journal
 from plasticity.replay import ReplayBuffer
 from plasticity.updater import Updater
+from individuation.experience import ExperienceLog
+from individuation.probe import IndividuationProbe
+from individuation.surprise import SurpriseGate
 from server import brain_api, feedback_api, openai_api
 from server.work_queue import InFlight, WorkQueue, canary_enabled, materialize
 
@@ -78,6 +81,9 @@ class AppState:
         self.trace_of_call_id: dict = {}
         self.call_lock = threading.Lock()
         self.started_at = time.time()
+        self.surprise_gate = SurpriseGate(config)
+        self.experience_log = ExperienceLog()
+        self.individuation_probe = IndividuationProbe()
 
 
 # ##################################################################

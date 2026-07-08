@@ -89,6 +89,27 @@ def brain_consolidate(request: Request) -> dict:
 
 
 # ##################################################################
+# brain dream
+# run one individuation consolidation: corroborate the day's surprising turns,
+# self-edit survivors into assistant-knowledge, absorb into the overlay, and
+# health-gate the night (commit or revert). Drains the worker first for exclusivity
+@router.post("/v1/brain/dream")
+def brain_dream(request: Request) -> dict:
+    from individuation.dream import dream
+
+    state = request.app.state.engram
+    _require_token(request, state)
+    state.queue.hold()
+    try:
+        report = dream(state.host, state.overlay, state.updater, state.journal,
+                       state.experience_log, state.individuation_probe, state.config)
+    finally:
+        state.queue.release()
+    return {"committed": report.committed, "facts_learned": report.facts_learned, "dropped": report.dropped,
+            "recall": report.recall, "entropy": report.entropy, "sycophancy": report.sycophancy}
+
+
+# ##################################################################
 # brain snapshot
 # gather the read-only view of the whole learning loop; the overlay magnitude is
 # Metal work so it takes the host lock to avoid a torn read of an updating overlay
@@ -103,7 +124,24 @@ def _brain_snapshot(state) -> dict:
         "paused": {"flag": state.pause_flag.paused, "reason": state.pause_flag.reason},
         "overlay": overlay_stats,
         "checkpoints": state.checkpoints.list()[:5],
+        "individuation": _individuation_stats(state),
         "uptime_s": time.time() - state.started_at,
+    }
+
+
+# ##################################################################
+# individuation stats
+# how much the model has absorbed of its user: whether ambient learning is on,
+# how many experiences are logged vs still to consolidate, and the probe-set size
+def _individuation_stats(state) -> dict:
+    experiences = state.experience_log.all()
+    unconsolidated = sum(1 for exp in experiences if not exp.consolidated)
+    return {
+        "enabled": state.config.individuation.enabled,
+        "experiences": len(experiences),
+        "unconsolidated": unconsolidated,
+        "surprise_threshold": state.surprise_gate.threshold(),
+        "probes": len(state.individuation_probe.all()),
     }
 
 

@@ -13,7 +13,8 @@ import threading
 
 import mlx.core as mx
 
-from engine.trace import Trace
+from engine.trace import Span, Trace
+from individuation.experience import Experience
 
 CANARY_DISABLED_THRESHOLD = 10 ** 9
 
@@ -146,6 +147,9 @@ class WorkQueue:
     # skipped_update, never silently dropped — a lost reward that leaves no record
     # would hang any caller draining the queue and hide feedback that did nothing
     def _process(self, job: dict) -> None:
+        if job["kind"] == "absorb_candidate":
+            self._process_candidate(job)
+            return
         if "token_ids" in job:
             self._process_direct(job)
             return
@@ -174,10 +178,44 @@ class WorkQueue:
                 self.state.host.model, self.state.overlay, job["token_ids"], job["gen_start"],
                 job["credit_spans"], job["reward"], job["kind"], self.state.replay, self.state.journal,
             )
-        if report.accepted:
-            self.accepted_updates += 1
-            self.state.pause_flag.check(self.state.overlay.total_norm(),
-                                        self.state.config.plasticity.adapter_norm_ceiling)
+        self._absorb_accepted(report)
+
+    # ##################################################################
+    # process candidate
+    # the per-turn individuation gate, off the response path: score the user's
+    # message surprise, pass it through the adaptive gate, and only on a surprising
+    # turn log the experience and absorb the user's tokens into the volatile overlay
+    def _process_candidate(self, job: dict) -> None:
+        span = job["credit_spans"][0]
+        # span_logprobs takes the gpu lock itself — do NOT wrap it (the lock is
+        # not reentrant, and a double-acquire deadlocks the worker holding it)
+        logp = self.state.host.span_logprobs(job["token_ids"], Span("user", span[0], span[1]), True)
+        surprise = float(-logp.mean())
+        if not self.state.surprise_gate.consider(surprise):
+            return
+        experience = Experience.create(job["user_text"], job["context_digest"], surprise,
+                                       self.state.model_path, self.accepted_updates)
+        self.state.experience_log.record(experience)
+        self.state.journal.record("experience", experience_id=experience.id, surprise=surprise)
+        if not self.state.config.individuation.absorb_overlay or self.state.pause_flag.paused:
+            return
+        with self.state.host.gpu_lock:
+            report = self.state.updater.apply(
+                self.state.host.model, self.state.overlay, job["token_ids"], job["gen_start"],
+                job["credit_spans"], 1.0, "absorb", None, self.state.journal,
+            )
+        self._absorb_accepted(report)
+
+    # ##################################################################
+    # absorb accepted
+    # bookkeeping shared by the direct and candidate absorb paths: count the update
+    # and re-check the adapter-norm ceiling that pauses runaway plasticity
+    def _absorb_accepted(self, report) -> None:
+        if not report.accepted:
+            return
+        self.accepted_updates += 1
+        self.state.pause_flag.check(self.state.overlay.total_norm(),
+                                    self.state.config.plasticity.adapter_norm_ceiling)
 
     # ##################################################################
     # credit spans
