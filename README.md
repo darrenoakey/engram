@@ -22,6 +22,16 @@ test-time-training, continual-learning, and online-RL literatures (see `DESIGN.m
 ./run check                 # quality gate: ruff + full test suite (real 0.8B model)
 ```
 
+**Chat with it:** open **http://127.0.0.1:8500/** — a plain chatbot that keeps the
+conversation and quietly individuates as you talk. The header pill shows
+`N noticed · M learned`; click it for the memory drawer (what it learned, a
+**Consolidate** button, and a **Prove recall** button).
+
+**Make it consolidate what it noticed into learned facts (run a "dream"):**
+```
+curl -sX POST http://127.0.0.1:8500/v1/brain/dream -H "Authorization: Bearer $(./run token)"
+```
+
 Point any OpenAI client at `http://127.0.0.1:8500/v1`. To teach it, send a reward:
 
 ```
@@ -35,6 +45,9 @@ automatically — no client change needed.
 
 ## How the learning loop works
 
+engram has **two learners on one plastic overlay** (full detail in **LEARNING.md**):
+
+**A — behaviour (the reward loop):** reward good/bad *decisions*, training on the model's own output.
 ```
 chat ─▶ generate (eval mode) ─▶ Trace{tokens, per-token logprobs, spans}
 feedback / tool outcome ─▶ scalar reward ─▶ update queue (GPU yields to inference)
@@ -42,6 +55,14 @@ feedback / tool outcome ─▶ scalar reward ─▶ update queue (GPU yields to 
            ▶ AdamW step ▶ delta cap ▶ KL gate (breach ⇒ restore snapshot) ▶ journal
    canary probe after every negative update ▶ 2 breaches ⇒ rollback to last-good checkpoint
 consolidate ▶ merge overlay into bf16 master ▶ requantize serving base ▶ KL-gated swap
+```
+
+**B — knowledge (ambient individuation):** absorb *the user* from ordinary chat, training on the user's words.
+```
+each turn ─▶ peak-surprise gate ─▶ log experience + gentle overlay absorb (felt by day)
+dream (POST /v1/brain/dream) ─▶ corroborate durable facts ─▶ self-edit into Q→A knowledge
+           ─▶ strong absorb ─▶ health-gate (cold-recall probe + entropy/sycophancy sentinels)
+           ─▶ commit (learned) or revert (nothing durable) ─ atomic, provenance-logged
 ```
 
 - **Positive reward**: reward-scaled cross-entropy — push up the tokens the model chose.
@@ -52,9 +73,14 @@ consolidate ▶ merge overlay into bf16 master ▶ requantize serving base ▶ K
 
 ## Documentation
 
-- **DESIGN.md** — canonical architecture, the exact update math, the research pedigree behind
-  every decision, and per-module contracts.
-- **STATUS.md** — current build state and the remaining deploy/prove/publish steps.
+- **LEARNING.md** — ⭐ start here: the complete reference for **how engram learns** — both
+  learners, the guarded update step, the loss math, the config, how to operate it, the code
+  map, the empirical findings, and where to take it next. Written for a fresh maintainer.
+- **DESIGN.md** — the behaviour (reward) loop in depth: architecture, update math, research
+  pedigree, per-module contracts.
+- **INDIVIDUATION.md** — the knowledge (ambient individuation) loop in depth, with the live
+  results and open problems.
+- **STATUS.md** — current build state.
 - **AGENTS.md** — operating manual and the non-obvious facts that bite.
 
 ## Requirements
