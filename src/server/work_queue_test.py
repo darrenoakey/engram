@@ -23,7 +23,8 @@ from engine.trace import Span, Trace
 from plasticity.checkpoints import Checkpoints
 from plasticity.journal import Journal
 from plasticity.replay import ReplayBuffer
-from server.app import create_app, serve_in_thread, stop_state
+from server.app import AppState, create_app, serve_in_thread, stop_state
+from server.work_queue import WorkQueue
 
 
 # ##################################################################
@@ -133,6 +134,29 @@ def test_credit_spans_take_newest_three(server):
 def _attempts(state) -> int:
     counts = state.journal.stats()["counts"]
     return counts.get("update", 0) + counts.get("rejected_update", 0)
+
+
+# ##################################################################
+# with include_think_tokens off, a reasoning-only turn (no answer/tool_call span)
+# still credits the think span — a reward must never be silently wasted
+def test_credit_spans_falls_back_to_think_when_no_answer():
+    config = replace(load_config(), plasticity=replace(load_config().plasticity, include_think_tokens=False))
+    queue = WorkQueue(AppState(config))
+    trace = Trace.create([0] * 20, 5, [], [Span("think", 5, 14)], {})
+    assert queue._credit_spans(trace) == [(5, 14)]
+
+
+# ##################################################################
+# a truly empty generation (no spans at all) is journaled as skipped_update
+# rather than silently dropped, so the reward leaves a record and drains the queue
+def test_empty_trace_journals_skipped_update(tmp_path: Path):
+    config = load_config()
+    state = AppState(config)
+    state.journal = Journal(tmp_path / "journal.jsonl")
+    trace = Trace.create([1, 2, 3, 4, 5, 6], 4, [], [], {})
+    trace.save()
+    WorkQueue(state)._process({"trace_id": trace.trace_id, "kind": "reward", "reward": -1.0})
+    assert state.journal.stats()["counts"].get("skipped_update") == 1
 
 
 # ##################################################################

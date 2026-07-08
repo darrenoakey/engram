@@ -59,7 +59,8 @@ def _brain(url: str) -> dict:
 
 def _processed(brain: dict) -> int:
     counts = brain["updates"]["counts"]
-    return counts.get("update", 0) + counts.get("rejected_update", 0) + counts.get("worker_error", 0)
+    retired = ("update", "rejected_update", "skipped_update", "worker_error")
+    return sum(counts.get(name, 0) for name in retired)
 
 
 # ##################################################################

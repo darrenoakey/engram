@@ -141,11 +141,16 @@ class WorkQueue:
     # ##################################################################
     # process
     # load the trace, build its credit spans, and run the guarded update under
-    # the host GPU lock; accepted updates trigger the post-update bookkeeping
+    # the host GPU lock; accepted updates trigger the post-update bookkeeping.
+    # A trace with no creditable span (a truly empty generation) is journaled as
+    # skipped_update, never silently dropped — a lost reward that leaves no record
+    # would hang any caller draining the queue and hide feedback that did nothing
     def _process(self, job: dict) -> None:
         trace = Trace.load(job["trace_id"])
         credit_spans = self._credit_spans(trace)
         if not credit_spans:
+            self.state.journal.record("skipped_update", trace_id=job["trace_id"], kind=job["kind"],
+                                      reward=job["reward"], reason="no creditable span")
             return
         with self.state.host.gpu_lock:
             report = self.state.updater.apply(
@@ -158,13 +163,24 @@ class WorkQueue:
     # ##################################################################
     # credit spans
     # the answer and tool_call spans (and think when configured), newest first
-    # and capped at three — the regions an outcome actually credits
+    # and capped at three — the regions an outcome actually credits. When a turn
+    # produced NO answer or tool call (a reasoning model that spent the whole
+    # budget inside <think>), fall back to the reasoning span so the feedback is
+    # never wasted — the reasoning IS the decision when nothing else was emitted
     def _credit_spans(self, trace: Trace) -> list:
+        spans = self._spans_of_kinds(trace, self._primary_kinds())
+        if not spans:
+            spans = self._spans_of_kinds(trace, {"think"})
+        return list(reversed(spans))[:3]
+
+    def _primary_kinds(self) -> set:
         kinds = {"tool_call", "answer"}
         if self.state.config.plasticity.include_think_tokens:
             kinds.add("think")
-        spans = [(span.start, span.end) for span in trace.spans if span.kind in kinds]
-        return list(reversed(spans))[:3]
+        return kinds
+
+    def _spans_of_kinds(self, trace: Trace, kinds: set) -> list:
+        return [(span.start, span.end) for span in trace.spans if span.kind in kinds]
 
     # ##################################################################
     # after accept

@@ -14,8 +14,8 @@ from pathlib import Path
 from common import store
 
 EVENT_TYPES = (
-    "update", "rejected_update", "rollback", "checkpoint", "consolidate", "canary", "worker_error",
-    "consolidate_reverted",
+    "update", "rejected_update", "skipped_update", "rollback", "checkpoint", "consolidate", "canary",
+    "worker_error", "consolidate_reverted",
 )
 
 
