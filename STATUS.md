@@ -66,16 +66,23 @@ targeted-editing stage (v2). Live tuning in gitignored `local/config.toml`.
 - **Real agent traffic**: point a tool-using client at the OpenAI endpoint so tool outcomes
   auto-score and drive learning over real work (the reason auto tool-scoring exists).
 
+## Reading order for a new maintainer
+1. **LEARNING.md** — the complete learning-algorithm reference. Start here.
+2. DESIGN.md (behaviour loop) · INDIVIDUATION.md (knowledge loop) · this file · AGENTS.md (gotchas).
+
 ## How to run it
 
 ```
 cd ~/src/engram
-./run check                 # full gate: ruff + 115 tests (~2 min, loads 0.8B repeatedly)
+./run check                 # full gate: ruff + ~154 real-model tests (loads the 0.8B repeatedly)
 ./run serve                 # start service on 127.0.0.1:8500 (loads the 9B)
 ./run status                # GET /v1/brain, pretty-printed
-./run proof --rounds 6      # end-to-end learning demonstration against a running server
+./run proof --rounds 6      # reward-loop learning demonstration against a running server
 ./run token                 # print the API bearer token
 ```
+
+Chat UI at **http://127.0.0.1:8500/** (memory drawer: noticed vs learned + Consolidate/Prove recall).
+Run a dream: `curl -sX POST http://127.0.0.1:8500/v1/brain/dream -H "Authorization: Bearer $(./run token)"`.
 
 Auth token for `/v1/feedback` and `/v1/brain/*` POSTs is minted on first boot into the macOS
 keychain (service `engram`, account `api-token`); `./run token` prints it. There are NO env vars.

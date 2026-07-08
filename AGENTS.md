@@ -31,3 +31,16 @@ with its research pedigree.
   threads through `generate`; only turn it off for direct-answer probes, not normal serving.
 - Tests must never write to live `local/data` — the session-autouse conftest redirects the whole
   store root to `output/testing`. A leaked canary subset would skip the real boot baseline.
+- Tests must also not read the live `local/config.toml` — the same conftest forces `load_config()` to
+  pure defaults (`config.set_forced_config_path`). Enabling e.g. individuation for the daemon would
+  otherwise silently turn it on across the whole suite.
+- NEVER wrap `host.span_logprobs(...)` in `with host.gpu_lock:` — it takes the (non-reentrant) lock
+  itself, so a second acquire deadlocks the worker while holding it (every `/v1/brain` then hangs).
+  `updater.apply(...)` is the opposite: it must be called WITH the lock held.
+- Two learners share one `lr_absorb`-family: the per-turn `absorb` (wake, gentle, keeps chat coherent)
+  and the dream's `consolidate` (sleep, strong, makes facts stick) are separate kinds with separate
+  LRs on purpose — don't collapse them back into one.
+- The individuation gate (peak surprise) is a cheap pre-filter; the dream's durability classifier is
+  the real selector. A permissive gate (`surprise_percentile` low) + gentle wake LR is the right combo.
+- Chat UI is served at `GET /` and carries the API token as an httpOnly same-origin cookie so its
+  Consolidate/Prove-recall actions authenticate without exposing the secret to page JS.
