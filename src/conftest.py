@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from common import store
+from common import config, store
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -21,5 +21,7 @@ def _isolate_data_root():
     root = Path("output/testing") / f"data-{uuid.uuid4().hex}"
     root.mkdir(parents=True, exist_ok=True)
     store.set_data_root(root)
+    config.set_forced_config_path(root / "no-such-config.toml")
     yield
     store.set_data_root(None)
+    config.set_forced_config_path(None)

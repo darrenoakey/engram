@@ -54,3 +54,17 @@ def test_unknown_section_rejected(tmp_path: Path):
 
 def test_repo_root_is_engram_checkout():
     assert (repo_root() / "DESIGN.md").exists()
+
+
+def test_forced_path_isolates_from_local_config(tmp_path: Path):
+    from common.config import set_forced_config_path
+
+    live = tmp_path / "live.toml"
+    live.write_text("[individuation]\nenabled = true\n")
+    set_forced_config_path(live)
+    try:
+        assert load_config().individuation.enabled is True
+        set_forced_config_path(tmp_path / "absent.toml")
+        assert load_config() == EngramConfig()
+    finally:
+        set_forced_config_path(tmp_path / "absent.toml")

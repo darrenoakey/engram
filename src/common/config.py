@@ -116,8 +116,26 @@ def _merged(defaults, section: dict, name: str):
     return replace(defaults, **cleaned)
 
 
+# tests force this to a nonexistent path so load_config() returns pure defaults
+# and never reads the live local/config.toml (which configures the running
+# service); without it, enabling e.g. individuation for the daemon would silently
+# change the behaviour of the whole test suite
+_forced_path: Path | None = None
+
+
+# ##################################################################
+# set forced config path
+# point argument-less load_config() at a fixed file (tests use a nonexistent one
+# to get defaults); None restores the production default of local/config.toml
+def set_forced_config_path(path: Path | None) -> None:
+    global _forced_path
+    _forced_path = Path(path) if path is not None else None
+
+
 def load_config(path: Path | None = None) -> EngramConfig:
-    toml_path = path if path is not None else repo_root() / "local" / "config.toml"
+    if path is None:
+        path = _forced_path if _forced_path is not None else repo_root() / "local" / "config.toml"
+    toml_path = path
     base = EngramConfig()
     if not toml_path.exists():
         return base

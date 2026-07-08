@@ -72,15 +72,21 @@ def user_message_tokens(host, messages: list):
 
 # ##################################################################
 # surprise
-# mean cross-entropy (nats) the current model assigns to the user's content span
-# given its prior context — the implicit label the user never states explicitly
+# a PEAK cross-entropy (nats) over the user's content span: the mean of the most
+# surprising quarter of its tokens. Mean surprise is the wrong signal — a fluent
+# factual sentence ("I'm allergic to shellfish") is linguistically predictable
+# token-to-token, so its MEAN is low, lower even than a terse "ok"; but its
+# informative token ("shellfish") spikes. The peak tracks novel content the way a
+# flat average never can, so genuine facts reach the gate instead of terse noise.
 def surprise(host, messages: list, config) -> float | None:
     packed = user_message_tokens(host, messages)
     if packed is None:
         return None
     full, (start, end) = packed
     logp = host.span_logprobs(full, Span("user", start, end), adapters_enabled=True)
-    return float(-logp.mean())
+    per_token = -np.array(logp.tolist())
+    top_k = max(1, per_token.size // 4)
+    return float(np.sort(per_token)[-top_k:].mean())
 
 
 # ##################################################################
