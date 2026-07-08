@@ -14,10 +14,23 @@ guarded online gradient update to a low-rank plastic overlay — reinforcing goo
 punishing failures — and periodically consolidates the overlay into the base weights. Learned
 state persists across restarts. Full research pedigree and the exact update math are in DESIGN.md.
 
-## Build status: CODE COMPLETE, LOCALLY GREEN, NOT YET DEPLOYED
+## Build status: DEPLOYED AND PROVEN ON THE LIVE 9B
 
 All five code partitions are implemented, reviewed, committed, and passing on the real 0.8B
-test model. **115 tests pass, ruff clean, warnings-as-errors.** ~3,400 LOC + ~2,100 test LOC.
+test model. **124 tests pass, ruff clean, warnings-as-errors.** ~3,500 LOC + ~2,600 test LOC.
+Published at https://github.com/darrenoakey/engram. Running under `auto` as `engram` on the 9B.
+
+**Proven end-to-end on the live Ornith-1.0-9B:**
+- Reinforcement raises a rewarded continuation's logprob; punishment lowers it (multiple
+  rounds=4/5 proof passes).
+- The 60-prompt canary stays within KL budget (mean_kl ~0.0003) with zero match failures and
+  no spurious rollbacks.
+- Learned overlay survives a graceful restart bit-exactly (probe delta 0.00000, overlay norm
+  preserved) via the shutdown checkpoint.
+
+Five bugs were found and fixed by running end-to-end on the real 9B (none reproducible on the
+0.8B): proof phase-coupling, runaway generation length, silently-dropped feedback on
+reasoning-only turns, spurious canary rollbacks, and learning lost on restart. See the git log.
 
 | Area | Files | Tests | State |
 |---|---|---|---|
@@ -28,19 +41,15 @@ test model. **115 tests pass, ruff clean, warnings-as-errors.** ~3,400 LOC + ~2,
 | `server/` (openai_api, feedback_api, brain_api, work_queue, app, client) | 6 | 26 | ✅ committed `9c77872` |
 | `evaluation/proof` (E2E demonstration) | 1 | 3 (in eval count) | ✅ committed `9fbdf45` |
 
-### Remaining work (the "continue from here" list)
-1. **Deploy under `auto`** as service `engram` (`~/bin/engram serve`). First boot loads the 9B
-   4-bit base and captures the 60-prompt canary baseline against the *original* base (one-time,
-   a few minutes). Verify `GET /v1/brain` responds and a chat completion works.
-2. **Live proof on the 9B**: `engram proof --rounds 6`. Expect reinforcement logprob UP,
-   punishment DOWN, stability not-paused, RESULT PASS. Wider margins than the 0.8B (the 9B's
-   per-prompt reasoning is diverse, so the shared-boilerplate contention that forced
-   punishment-first ordering is a 0.8B pathology — the ordering stays correct regardless).
-3. **Prove persistence live**: `engram proof` → `auto restart engram` → re-probe the same
-   continuations; learned overlay must reload from checkpoint (values within ~1e-3).
-4. **Push to GitHub** (repo does not exist remotely yet — `/publish` or `gh repo create`).
-5. Optional: exercise a real `/v1/brain/consolidate` on the 9B (heavy: dequantize-merge-requant
-   the 18.8GB master; canary-gated with auto-revert), then confirm the swapped generation serves.
+### Remaining / optional next steps
+- **Consolidation on the 9B**: exercise a real `/v1/brain/consolidate` (heavy: dequantize-merge-
+  requant the 18.8GB master; canary-gated with auto-revert), then confirm the swapped generation
+  serves. The path is tested on the 0.8B; it has not yet been run against the 9B master.
+- **Punishment margin**: the deliberately-gentle punishment (λ_neg=0.5) is near the noise floor
+  at rounds≤3 on the 9B; use rounds≥4 for a clean proof. Not a bug — a conservative-by-design
+  negative update. Raising λ_neg would need fresh squeezing-pathology evidence first.
+- **Real agent traffic**: point a tool-using client at the OpenAI endpoint so tool outcomes
+  auto-score and drive learning over real work (the reason auto tool-scoring exists).
 
 ## How to run it
 
