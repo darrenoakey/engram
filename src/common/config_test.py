@@ -14,6 +14,18 @@ def test_defaults_when_no_file(tmp_path: Path):
     assert cfg == EngramConfig()
     assert cfg.plasticity.lambda_neg == 0.5
     assert cfg.plasticity.mid_layers == (8, 28)
+    assert cfg.plasticity.lr_absorb == 5e-6
+    assert cfg.individuation.enabled is False
+    assert cfg.individuation.surprise_percentile == 0.7
+
+
+def test_individuation_overlay(tmp_path: Path):
+    toml = tmp_path / "config.toml"
+    toml.write_text("[individuation]\nenabled = true\nsurprise_percentile = 0.85\n")
+    cfg = load_config(toml)
+    assert cfg.individuation.enabled is True
+    assert cfg.individuation.surprise_percentile == 0.85
+    assert cfg.individuation.selfedit_paraphrases == 4
 
 
 def test_toml_overlay(tmp_path: Path):

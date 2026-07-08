@@ -46,6 +46,7 @@ class PlasticityConfig:
     mid_layers: tuple = (8, 28)
     lr_reinforce: float = 1e-6
     lr_reward: float = 5e-6
+    lr_absorb: float = 5e-6
     lambda_neg: float = 0.5
     beta_kl: float = 0.05
     max_span_tokens: int = 256
@@ -74,6 +75,27 @@ class FeedbackConfig:
     tool_failure_reward: float = -0.5
 
 
+# =============================================================================
+#  individuation — ambient continual self-tailoring (INDIVIDUATION.md)
+#  why: the knowledge half — from unlabelled use, absorb the USER into the
+#  weights. A surprise gate picks the turns worth learning; a volatile overlay
+#  absorbs them by day; a guarded nightly dream consolidates into the base
+@dataclass(frozen=True)
+class IndividuationConfig:
+    enabled: bool = False              # off by default; the reward loop runs without it
+    absorb_overlay: bool = True        # write the volatile overlay on surprising turns (felt by day)
+    surprise_percentile: float = 0.7   # learn user turns above this rolling percentile of surprise
+    surprise_window: int = 64          # rolling window of recent surprise values for the threshold
+    surprise_warmup: int = 8           # turns to observe before the gate activates
+    min_user_tokens: int = 4           # ignore trivially short user turns
+    selfedit_paraphrases: int = 4      # assistant-knowledge QA paraphrases per corroborated fact
+    selfedit_max_tokens: int = 256     # generation budget for a self-edit
+    consolidate_after_dreams: int = 1  # sustained-green nights before folding to base (v1: 1)
+    probe_recall_target: float = 0.6   # individuation probe pass bar
+    sentinel_entropy_ceiling: float = 6.0   # mean next-token entropy ceiling (collapse guard)
+    sentinel_sycophancy_ceiling: float = 0.5  # agreement rate on planted-false statements ceiling
+
+
 @dataclass(frozen=True)
 class EngramConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
@@ -82,6 +104,7 @@ class EngramConfig:
     plasticity: PlasticityConfig = field(default_factory=PlasticityConfig)
     guards: GuardsConfig = field(default_factory=GuardsConfig)
     feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
+    individuation: IndividuationConfig = field(default_factory=IndividuationConfig)
 
 
 def _merged(defaults, section: dict, name: str):

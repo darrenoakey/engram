@@ -148,10 +148,19 @@ class Updater:
             model.eval()
         masked = guards.topk_mask(accum, self.config.topk_grad_fraction)
         clipped, grad_norm = guards.clip_global(masked, self.config.grad_clip_norm)
-        self.optimizer.learning_rate = self.config.lr_reinforce if kind == "reinforce" else self.config.lr_reward
+        self.optimizer.learning_rate = self._learning_rate(kind)
         self.optimizer.update(model, tree_unflatten(list(clipped.items())))
         mx.eval(model.parameters(), self.optimizer.state)
         return loss, grad_norm
+
+    # ##################################################################
+    # learning rate
+    # each update kind has its own step size: gentle self-reinforcement, a
+    # stronger reward step, and the user-token absorb step (individuation)
+    def _learning_rate(self, kind: str) -> float:
+        rates = {"reinforce": self.config.lr_reinforce, "reward": self.config.lr_reward,
+                 "absorb": self.config.lr_absorb}
+        return rates.get(kind, self.config.lr_reward)
 
     # ##################################################################
     # accumulate

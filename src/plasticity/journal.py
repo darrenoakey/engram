@@ -16,6 +16,8 @@ from common import store
 EVENT_TYPES = (
     "update", "rejected_update", "skipped_update", "rollback", "checkpoint", "consolidate", "canary",
     "worker_error", "consolidate_reverted",
+    # individuation (INDIVIDUATION.md)
+    "experience", "dream", "dream_reverted", "individuation_probe", "sentinel",
 )
 
 
