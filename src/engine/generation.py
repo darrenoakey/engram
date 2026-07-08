@@ -36,10 +36,11 @@ def marker_ids(tokenizer) -> dict:
 # =============================================================================
 #  build prompt
 #  why: the qwen3_5 chat template renders tools natively and, with thinking on,
-#  injects the opening <think> into the prompt itself
-def build_prompt(tokenizer, messages: list, tools: list | None) -> list[int]:
+#  injects the opening <think> into the prompt itself; thinking can be turned off
+#  so a caller (e.g. the canary answer check) gets a direct answer, not reasoning
+def build_prompt(tokenizer, messages: list, tools: list | None, enable_thinking: bool = True) -> list[int]:
     ids = tokenizer.apply_chat_template(
-        messages, tools=tools or None, add_generation_prompt=True, enable_thinking=True
+        messages, tools=tools or None, add_generation_prompt=True, enable_thinking=enable_thinking
     )
     return [int(t) for t in ids]
 

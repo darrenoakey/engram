@@ -61,13 +61,17 @@ def _greedy(sampling):
 # =============================================================================
 #  greedy generate
 #  why: one deterministic ≤32-token continuation; disable_overlay picks the base
-#  (baseline reference) or the live model as-is (probe-time expected-match check)
-def _greedy_generate(host, messages, disable_overlay: bool):
+#  (baseline reference) or the live model as-is (probe-time expected-match check).
+#  enable_thinking is turned off for the answer-match check so a reasoning model
+#  answers directly instead of spending the whole budget inside <think> — without
+#  it the expected substring never appears in 32 tokens and every canary spuriously
+#  reports a match failure, rolling back legitimate learning
+def _greedy_generate(host, messages, disable_overlay: bool, enable_thinking: bool = True):
     sampling = _greedy(host.config.sampling)
     if disable_overlay:
         with _overlay_off(host):
-            return host.generate(messages, sampling=sampling)
-    return host.generate(messages, sampling=sampling)
+            return host.generate(messages, sampling=sampling, enable_thinking=enable_thinking)
+    return host.generate(messages, sampling=sampling, enable_thinking=enable_thinking)
 
 
 # =============================================================================
@@ -184,7 +188,7 @@ def _record_kl(host, record: dict) -> float:
 #  why: coarse behavioral check for an answer-bearing probe — greedy-generate
 #  under the live model and confirm the expected substring still appears
 def _match_expected(host, pid: str, messages: list[dict]) -> bool:
-    trace = _greedy_generate(host, messages, disable_overlay=False)
+    trace = _greedy_generate(host, messages, disable_overlay=False, enable_thinking=False)
     text = host.tokenizer.decode(trace.token_ids[trace.gen_start :])
     return EXPECTED[pid].lower() in text.lower()
 

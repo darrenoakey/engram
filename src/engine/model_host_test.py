@@ -74,6 +74,19 @@ def test_span_logprobs_flag_ignored_without_overlay(host, generated):
     assert bool(mx.allclose(enabled, disabled, atol=0.0).item())
 
 
+# ##################################################################
+# with thinking disabled the qwen3_5 template omits the opening <think>, so the
+# generation starts as an answer, not reasoning — the canary answer check needs
+# this so a direct reply appears within its short token budget
+def test_generate_without_thinking_answers_directly(host, det_sampling):
+    messages = [{"role": "user", "content": "Repeat this word exactly: kangaroo"}]
+    thinking = host.generate(messages, sampling=det_sampling, enable_thinking=True)
+    direct = host.generate(messages, sampling=det_sampling, enable_thinking=False)
+    assert thinking.spans[0].kind == "think"
+    assert direct.spans[0].kind == "answer"
+    assert "kangaroo" in host.tokenizer.decode(direct.token_ids[direct.gen_start :]).lower()
+
+
 # =============================================================================
 #  manual chosen logprobs
 #  why: an independent recomputation of the teacher-forced math so the test

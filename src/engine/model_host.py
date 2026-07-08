@@ -42,14 +42,14 @@ class ModelHost:
     #  generate
     #  why: one turn of inference recorded as a Trace; eval mode keeps DeltaNet
     #  on its fast kernel, and the lock guarantees exclusive GPU access
-    def generate(self, messages, tools=None, sampling=None, on_token=None) -> Trace:
+    def generate(self, messages, tools=None, sampling=None, on_token=None, enable_thinking=True) -> Trace:
         sampling = sampling if sampling is not None else self.config.sampling
         with self.gpu_lock:
-            return self._generate_locked(messages, tools, sampling, on_token)
+            return self._generate_locked(messages, tools, sampling, on_token, enable_thinking)
 
-    def _generate_locked(self, messages, tools, sampling, on_token) -> Trace:
+    def _generate_locked(self, messages, tools, sampling, on_token, enable_thinking) -> Trace:
         self.model.eval()
-        prompt_ids = generation.build_prompt(self.tokenizer, messages, tools)
+        prompt_ids = generation.build_prompt(self.tokenizer, messages, tools, enable_thinking)
         in_think = generation.starts_in_think(prompt_ids, self.markers)
         sampler = generation.build_sampler(sampling)
         gen_ids, logprobs = generation.stream_generation(
