@@ -12,6 +12,7 @@ from __future__ import annotations
 import socket
 import threading
 import time
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
@@ -143,12 +144,36 @@ def _maybe_baseline(state: AppState) -> None:
 
 
 # ##################################################################
+# lifespan
+# on graceful shutdown (a deploy, an auto restart, SIGTERM) persist the current
+# plastic overlay so learning done since the last periodic checkpoint is never
+# lost — without this a restart reverts to the last checkpoint_every-th update
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    persist_on_shutdown(app.state.engram)
+
+
+# ##################################################################
+# persist on shutdown
+# stop the worker, then checkpoint the overlay under the GPU lock and journal it;
+# marked clean so the next boot restores exactly this learned state
+def persist_on_shutdown(state: AppState) -> None:
+    if state.overlay is None or state.checkpoints is None:
+        return
+    state.queue.stop()
+    with state.host.gpu_lock:
+        checkpoint_id = state.checkpoints.save(state.overlay, state.queue.accepted_updates, state.queue.last_clean)
+    state.journal.record("checkpoint", checkpoint_id=checkpoint_id, reason="graceful shutdown")
+
+
+# ##################################################################
 # create app
 # build the FastAPI application with its routers and shared state; used by both
 # the production server and the test harness
 def create_app(config=None, model_path=None, journal=None, checkpoints=None, replay=None, start_queue=True) -> FastAPI:
     config = config if config is not None else load_config()
-    app = FastAPI(title="engram")
+    app = FastAPI(title="engram", lifespan=lifespan)
     app.state.engram = build_state(config, model_path, journal, checkpoints, replay, start_queue)
     app.include_router(openai_api.router)
     app.include_router(feedback_api.router)

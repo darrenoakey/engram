@@ -23,7 +23,7 @@ from engine.trace import Trace
 from plasticity.checkpoints import Checkpoints
 from plasticity.journal import Journal
 from plasticity.replay import ReplayBuffer
-from server.app import create_app, serve_in_thread, stop_state
+from server.app import build_state, create_app, persist_on_shutdown, serve_in_thread, stop_state
 
 
 # ##################################################################
@@ -140,3 +140,45 @@ def _wait_updates(url: str, target: int, timeout: float = 120.0) -> None:
             return
         threading.Event().wait(0.3)
     raise AssertionError(f"updates stalled below {target}")
+
+
+# ##################################################################
+# a graceful shutdown persists learning even when no periodic checkpoint has
+# fired, so a restart resumes the exact learned overlay rather than reverting to
+# the last checkpoint_every-th update — the durability guarantee restarts rely on
+def test_graceful_shutdown_persists_learning(tmp_path: Path):
+    config = _config()
+    never = replace(config.guards, canary_every=10 ** 9, checkpoint_every=10 ** 9)
+    config = replace(config, guards=never)
+    first = _learned_state(config, tmp_path)
+    norm_before = first.overlay.total_norm()
+    assert norm_before > 0.0
+    assert first.checkpoints.list() == []
+    persist_on_shutdown(first)
+    assert len(first.checkpoints.list()) == 1
+    second = build_state(config, model_path=config.model.test_path,
+                         journal=Journal(tmp_path / "j2.jsonl"),
+                         checkpoints=_checkpoints(tmp_path), replay=ReplayBuffer(tmp_path / "r2.json"))
+    stop_state(second)
+    assert abs(second.overlay.total_norm() - norm_before) < 1e-4
+
+
+# ##################################################################
+# learned state
+# build a real state, generate one turn, reinforce it, and wait for the worker
+# to apply the update so the overlay carries genuine learning
+def _learned_state(config, work: Path):
+    state = build_state(config, model_path=config.model.test_path, journal=Journal(work / "j.jsonl"),
+                        checkpoints=_checkpoints(work), replay=ReplayBuffer(work / "r.json"))
+    trace = state.host.generate([{"role": "user", "content": "Explain addition briefly."}], sampling=config.sampling)
+    trace.save()
+    for _ in range(4):
+        state.queue.enqueue({"kind": "reward", "trace_id": trace.trace_id, "reward": 0.5, "source": "t"})
+    deadline = time.time() + 120.0
+    while time.time() < deadline and state.journal.stats()["counts"].get("update", 0) < 4:
+        threading.Event().wait(0.3)
+    return state
+
+
+def _checkpoints(work: Path) -> Checkpoints:
+    return Checkpoints(work / "ckpt", ring=20)
