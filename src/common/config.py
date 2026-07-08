@@ -46,7 +46,8 @@ class PlasticityConfig:
     mid_layers: tuple = (8, 28)
     lr_reinforce: float = 1e-6
     lr_reward: float = 5e-6
-    lr_absorb: float = 5e-6
+    lr_absorb: float = 5e-6        # per-turn (wake) user-token absorb — gentle, keeps chat coherent
+    lr_consolidate: float = 2e-5   # dream (sleep) fact absorb — stronger; the dream is health-gated
     lambda_neg: float = 0.5
     beta_kl: float = 0.05
     max_span_tokens: int = 256
@@ -94,7 +95,7 @@ class IndividuationConfig:
     consolidate_after_dreams: int = 1  # sustained-green nights before folding to base (v1: 1)
     probe_recall_target: float = 0.6   # individuation probe pass bar
     sentinel_entropy_ceiling: float = 6.0   # mean next-token entropy ceiling (runaway randomness)
-    sentinel_entropy_floor: float = 1.0     # entropy floor: below it the distribution is collapsing
+    sentinel_entropy_floor: float = 0.3     # floor below the model's natural ~0.8; catches real collapse
     sentinel_sycophancy_ceiling: float = 0.5  # agreement rate on planted-false statements ceiling
 
 

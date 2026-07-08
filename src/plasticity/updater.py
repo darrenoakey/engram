@@ -159,7 +159,7 @@ class Updater:
     # stronger reward step, and the user-token absorb step (individuation)
     def _learning_rate(self, kind: str) -> float:
         rates = {"reinforce": self.config.lr_reinforce, "reward": self.config.lr_reward,
-                 "absorb": self.config.lr_absorb}
+                 "absorb": self.config.lr_absorb, "consolidate": self.config.lr_consolidate}
         return rates.get(kind, self.config.lr_reward)
 
     # ##################################################################

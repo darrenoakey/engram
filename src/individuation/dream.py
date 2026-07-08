@@ -111,7 +111,7 @@ def _train_fact(host, overlay, updater, journal, pairs, epochs: int) -> None:
     for _ in range(max(1, epochs)):
         for token_ids, gen_start, span in examples:
             with host.gpu_lock:
-                updater.apply(host.model, overlay, token_ids, gen_start, [span], 1.0, "absorb", None, journal)
+                updater.apply(host.model, overlay, token_ids, gen_start, [span], 1.0, "consolidate", None, journal)
 
 
 # ##################################################################
