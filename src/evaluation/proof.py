@@ -98,6 +98,22 @@ def feedback(url: str, token: str, trace_id: str, reward: float, source: str = "
 
 
 # ##################################################################
+# checkpoint / rollback
+# capture the current overlay as a named baseline and later restore it exactly;
+# the proof uses these to run each phase from an identical clean starting point
+def checkpoint(url: str, token: str) -> str:
+    response = httpx.post(f"{url}/v1/brain/checkpoint", headers=_auth(token), timeout=TIMEOUT)
+    response.raise_for_status()
+    return response.json()["checkpoint_id"]
+
+
+def rollback(url: str, token: str, checkpoint_id: str) -> None:
+    body = {"checkpoint_id": checkpoint_id}
+    response = httpx.post(f"{url}/v1/brain/rollback", json=body, headers=_auth(token), timeout=TIMEOUT)
+    response.raise_for_status()
+
+
+# ##################################################################
 # wait drained
 # block until the queue is empty and the worker has gone quiet. `since` is the
 # processed count captured BEFORE the jobs were enqueued: requiring the count to
@@ -207,12 +223,18 @@ def persistence_probe(url: str, token: str) -> dict:
 # run proof
 # the whole demonstration: punishment, reinforcement and stability, printing a
 # compact scoreboard and returning a result that passes only if all verdicts
-# hold. Punishment runs FIRST so it acts on a clean overlay with an empty replay
-# buffer — otherwise the earlier positive spans replayed into every update would
-# fight the negative signal (acute on the 0.8B, whose reasoning is near-identical
-# boilerplate across prompts, so both continuations share most of their tokens)
+# hold. Each phase runs from an IDENTICAL clean baseline — the overlay is
+# checkpointed up front and rolled back to it between phases — so the two
+# directions are proven independently and can never cross-contaminate. That
+# matters on small models whose reasoning is near-identical boilerplate across
+# prompts (both continuations share most tokens, so without the reset punishing
+# one would drag the other down); on the 9B the phases are naturally distinct.
+# Punishment runs first so reinforcement's positive replay spans never leak into
+# it. The reinforcement result is left in place so learned state is observable.
 def run_proof(url: str, token: str, rounds: int = 6) -> ProofResult:
+    baseline = checkpoint(url, token)
     punishment = punishment_phase(url, token, rounds)
+    rollback(url, token, baseline)
     reinforcement = reinforcement_phase(url, token, rounds)
     stability = stability_phase(url, token)
     passed = reinforcement["verdict"] and punishment["verdict"] and stability["verdict"]
