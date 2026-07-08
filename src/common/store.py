@@ -13,9 +13,23 @@ from pathlib import Path
 
 from common.config import repo_root
 
+# tests redirect the whole data tree here (via conftest) so no test ever writes
+# into the live local/data — the shared-canary/checkpoint/trace pollution that
+# silently skips a production baseline or restores a wrong-shaped overlay
+_data_root_override: Path | None = None
+
+
+# ##################################################################
+# set data root
+# point every store path at a different tree (tests only); None restores the
+# production default of <repo>/local/data
+def set_data_root(path: Path | None) -> None:
+    global _data_root_override
+    _data_root_override = Path(path) if path is not None else None
+
 
 def data_root() -> Path:
-    root = repo_root() / "local" / "data"
+    root = _data_root_override if _data_root_override is not None else repo_root() / "local" / "data"
     root.mkdir(parents=True, exist_ok=True)
     return root
 

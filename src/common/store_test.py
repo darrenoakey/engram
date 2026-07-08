@@ -42,3 +42,16 @@ def test_data_layout_dirs_exist():
     assert store.checkpoints_dir().is_dir()
     assert store.canary_dir().is_dir()
     assert store.journal_path().parent.is_dir()
+
+
+def test_set_data_root_redirects_every_path(tmp_path: Path):
+    previous = store.data_root()
+    try:
+        store.set_data_root(tmp_path / "redirected")
+        assert store.data_root() == (tmp_path / "redirected")
+        assert str(store.traces_dir()).startswith(str(tmp_path))
+        assert str(store.canary_dir()).startswith(str(tmp_path))
+        assert str(store.journal_path()).startswith(str(tmp_path))
+    finally:
+        store.set_data_root(previous)
+    assert store.data_root() == previous
