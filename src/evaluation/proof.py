@@ -17,6 +17,10 @@ import httpx
 TIMEOUT = 60.0
 CHAT_TIMEOUT = 600.0
 EPS = 1e-3
+# bound the proof's own generations so a reasoning model on the 9B does not run
+# to the serving default (thousands of tokens, minutes per call); a short span is
+# still a real self-produced continuation to reinforce or punish
+PROOF_MAX_TOKENS = 96
 REINFORCE_PROMPT = "In one short sentence, what is two plus two?"
 PUNISH_PROMPT = "In one short sentence, name a primary color."
 
@@ -151,12 +155,12 @@ def _continuation(text: str) -> str:
 # derive a fixed self-produced continuation, probe it, then repeatedly re-elicit
 # and reward it, draining after each round; return the before/after logprobs
 def _learn_phase(url: str, token: str, prompt: str, reward: float, rounds: int) -> dict:
-    text, _ = chat(url, _user(prompt))
+    text, _ = chat(url, _user(prompt), max_tokens=PROOF_MAX_TOKENS)
     continuation = _continuation(text)
     before = probe(url, token, prompt, continuation)["logprob_sum"]
     for _ in range(rounds):
         since = _processed(_brain(url))
-        _, trace_id = chat(url, _user(prompt))
+        _, trace_id = chat(url, _user(prompt), max_tokens=PROOF_MAX_TOKENS)
         feedback(url, token, trace_id, reward)
         wait_drained(url, since=since)
     after = probe(url, token, prompt, continuation)["logprob_sum"]
@@ -205,7 +209,7 @@ def stability_phase(url: str, token: str) -> dict:
 # elicit the model's own continuation for a fixed prompt and probe it — used
 # either side of a restart to show the learned overlay reloaded from checkpoint
 def _self_probe(url: str, token: str, prompt: str) -> float:
-    text, _ = chat(url, _user(prompt))
+    text, _ = chat(url, _user(prompt), max_tokens=PROOF_MAX_TOKENS)
     continuation = _continuation(text)
     return probe(url, token, prompt, continuation)["logprob_sum"]
 
