@@ -15,6 +15,7 @@ import mlx.core as mx
 
 from engine.trace import Span, Trace
 from individuation.experience import Experience
+from individuation.surprise import surprise_of
 
 CANARY_DISABLED_THRESHOLD = 10 ** 9
 
@@ -190,8 +191,10 @@ class WorkQueue:
         # span_logprobs takes the gpu lock itself — do NOT wrap it (the lock is
         # not reentrant, and a double-acquire deadlocks the worker holding it)
         logp = self.state.host.span_logprobs(job["token_ids"], Span("user", span[0], span[1]), True)
-        surprise = float(-logp.mean())
-        if not self.state.surprise_gate.consider(surprise):
+        surprise = float(surprise_of(logp))
+        fired = self.state.surprise_gate.consider(surprise)
+        self.state.journal.record("candidate", surprise=surprise, fired=fired, text=job["user_text"][:80])
+        if not fired:
             return
         experience = Experience.create(job["user_text"], job["context_digest"], surprise,
                                        self.state.model_path, self.accepted_updates)

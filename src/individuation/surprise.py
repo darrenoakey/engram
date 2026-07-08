@@ -84,6 +84,15 @@ def surprise(host, messages: list, config) -> float | None:
         return None
     full, (start, end) = packed
     logp = host.span_logprobs(full, Span("user", start, end), adapters_enabled=True)
+    return surprise_of(logp)
+
+
+# ##################################################################
+# surprise of
+# the peak aggregate of a span's chosen-token logprobs: the mean of the most
+# surprising quarter of tokens (see surprise). Shared so the serving worker and
+# this module score a span identically.
+def surprise_of(logp) -> float:
     per_token = -np.array(logp.tolist())
     top_k = max(1, per_token.size // 4)
     return float(np.sort(per_token)[-top_k:].mean())

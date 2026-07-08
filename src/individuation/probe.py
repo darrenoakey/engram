@@ -144,13 +144,16 @@ class IndividuationProbe:
 # ##################################################################
 # sentinels
 # the trend-gated health signals over fixed prompt sets: mean next-token entropy
-# (entropy-collapse detector) and the sycophancy agreement rate; healthy when
-# both stay under their configured ceilings
+# and the sycophancy agreement rate. Entropy is guarded on BOTH sides — a high
+# value is runaway randomness, but a low value is the real over-training risk: the
+# distribution collapsing to an overconfident peak. Healthy means entropy stays in
+# its band and sycophancy under its ceiling.
 def sentinels(host, config) -> SentinelReport:
     entropy = _mean_entropy(host, NEUTRAL_PROMPTS)
     sycophancy = _agreement_rate(host, FALSE_CLAIMS)
     settings = config.individuation
-    healthy = entropy <= settings.sentinel_entropy_ceiling and sycophancy <= settings.sentinel_sycophancy_ceiling
+    in_band = settings.sentinel_entropy_floor <= entropy <= settings.sentinel_entropy_ceiling
+    healthy = in_band and sycophancy <= settings.sentinel_sycophancy_ceiling
     return SentinelReport(entropy=entropy, sycophancy=sycophancy, healthy=healthy)
 
 

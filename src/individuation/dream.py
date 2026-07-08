@@ -80,34 +80,38 @@ def _absorb_all(host, overlay, updater, journal, individuation_probe, config, ex
             dropped += 1
             journal.record("experience", experience_id=exp.id, durable=verdict.durable, kind=verdict.kind)
             continue
-        _train_fact(host, overlay, updater, journal, pairs)
-        individuation_probe.add(_fact_probe(pairs, verdict.statement))
+        _train_fact(host, overlay, updater, journal, pairs, config.individuation.dream_epochs)
+        individuation_probe.add(_fact_probe(pairs))
         facts += 1
     return facts, dropped
 
 
 # ##################################################################
 # fact probe
-# build the cold-recall check for a learned fact: prefer a paraphrased question
-# that does NOT itself contain the expected word, so recall is genuine and not a
-# question that leaks its own answer
-def _fact_probe(pairs, statement: str) -> FactProbe:
-    noun = _key_noun(statement)
+# build the cold-recall check for a learned fact. The expected word is drawn from
+# the ANSWER the model was trained to produce (not the raw user statement, whose
+# longest word is often the wrong target for a compound sentence), and the
+# question is a paraphrase that does NOT itself contain that word, so recall is
+# genuine rather than a question that leaks its own answer
+def _fact_probe(pairs) -> FactProbe:
     for qa in pairs:
-        if noun not in qa.question.lower():
+        noun = _key_noun(qa.answer)
+        if noun and noun not in qa.question.lower():
             return FactProbe(question=qa.question, expect=noun)
-    return FactProbe(question=pairs[-1].question, expect=noun)
+    qa = pairs[-1]
+    return FactProbe(question=qa.question, expect=_key_noun(qa.answer))
 
 
 # ##################################################################
 # train fact
 # absorb every QA pair of one fact into the overlay: an absorb update teacher-
 # forces the assistant-knowledge ANSWER tokens under the guarded pipeline
-def _train_fact(host, overlay, updater, journal, pairs) -> None:
-    for qa in pairs:
-        token_ids, gen_start, span = selfedit.training_example(host, qa)
-        with host.gpu_lock:
-            updater.apply(host.model, overlay, token_ids, gen_start, [span], 1.0, "absorb", None, journal)
+def _train_fact(host, overlay, updater, journal, pairs, epochs: int) -> None:
+    examples = [selfedit.training_example(host, qa) for qa in pairs]
+    for _ in range(max(1, epochs)):
+        for token_ids, gen_start, span in examples:
+            with host.gpu_lock:
+                updater.apply(host.model, overlay, token_ids, gen_start, [span], 1.0, "absorb", None, journal)
 
 
 # ##################################################################

@@ -90,9 +90,11 @@ class IndividuationConfig:
     min_user_tokens: int = 4           # ignore trivially short user turns
     selfedit_paraphrases: int = 4      # assistant-knowledge QA paraphrases per corroborated fact
     selfedit_max_tokens: int = 256     # generation budget for a self-edit
+    dream_epochs: int = 1              # passes over each fact's QA set during a dream
     consolidate_after_dreams: int = 1  # sustained-green nights before folding to base (v1: 1)
     probe_recall_target: float = 0.6   # individuation probe pass bar
-    sentinel_entropy_ceiling: float = 6.0   # mean next-token entropy ceiling (collapse guard)
+    sentinel_entropy_ceiling: float = 6.0   # mean next-token entropy ceiling (runaway randomness)
+    sentinel_entropy_floor: float = 1.0     # entropy floor: below it the distribution is collapsing
     sentinel_sycophancy_ceiling: float = 0.5  # agreement rate on planted-false statements ceiling
 
 
