@@ -57,6 +57,15 @@ targeted-editing stage (v2). Live tuning in gitignored `local/config.toml`.
 ### Original next steps (still open)
 
 ### Remaining / optional next steps
+- **Continuous background learning (auto-dream) — SHIPPED.** A `DreamLoop`
+  (`src/individuation/dream_loop.py`) now runs the dream continuously when `individuation.auto_dream`
+  is on: it dreams new experiences on priority, re-polishes learned facts gone stale (>48h), and sleeps
+  when idle. A fixed loop — during sustained use it learns continuously; it only sleeps when there's
+  nothing to learn. Every cycle reuses the existing atomic dream (snapshot → probe/sentinels →
+  commit/revert), so it is non-destructive by construction. The chat UI header pill shows
+  `🧠 learning…` while a cycle runs, and the memory drawer reports loop status. Enabled in
+  `local/config.toml`. This closes the "you have to click Consolidate" gap: tell it your name, stop
+  typing ~60s, and it consolidates + verifies the recall on its own.
 - **Consolidation on the 9B**: exercise a real `/v1/brain/consolidate` (heavy: dequantize-merge-
   requant the 18.8GB master; canary-gated with auto-revert), then confirm the swapped generation
   serves. The path is tested on the 0.8B; it has not yet been run against the 9B master.
@@ -78,6 +87,8 @@ cd ~/src/engram
 ./run serve                 # start service on 127.0.0.1:8500 (loads the 9B)
 ./run status                # GET /v1/brain, pretty-printed
 ./run proof --rounds 6      # reward-loop learning demonstration against a running server
+./run name-recall           # dedicated E2E: tell it a name, fresh chat recalls it (standalone)
+./run family-recall         # multi-fact E2E: tell it your family, fresh chat recalls each (standalone)
 ./run token                 # print the API bearer token
 ```
 

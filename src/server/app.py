@@ -84,6 +84,7 @@ class AppState:
         self.surprise_gate = SurpriseGate(config)
         self.experience_log = ExperienceLog()
         self.individuation_probe = IndividuationProbe()
+        self.dream_loop = None
 
 
 # ##################################################################
@@ -109,7 +110,24 @@ def build_state(config, model_path=None, journal=None, checkpoints=None, replay=
     state.queue = WorkQueue(state)
     if start_queue:
         state.queue.start()
+    _maybe_start_dream_loop(state)
     return state
+
+
+# ##################################################################
+# maybe start dream loop
+# the continuous background learner runs only when individuation is on AND the
+# operator opted into auto_dream; off by default so the manual dream path is
+# unchanged. Started after the worker so hold()/release() are safe to call
+def _maybe_start_dream_loop(state: AppState) -> None:
+    if not state.config.individuation.enabled:
+        return
+    if not state.config.individuation.auto_dream:
+        return
+    from individuation.dream_loop import DreamLoop
+
+    state.dream_loop = DreamLoop(state)
+    state.dream_loop.start()
 
 
 # ##################################################################
@@ -167,6 +185,8 @@ async def lifespan(app: FastAPI):
 def persist_on_shutdown(state: AppState) -> None:
     if state.overlay is None or state.checkpoints is None:
         return
+    if state.dream_loop is not None:
+        state.dream_loop.stop()
     state.queue.stop()
     with state.host.gpu_lock:
         checkpoint_id = state.checkpoints.save(state.overlay, state.queue.accepted_updates, state.queue.last_clean)
@@ -193,6 +213,8 @@ def create_app(config=None, model_path=None, journal=None, checkpoints=None, rep
 # halt the background worker thread; used by test teardown so a stopped server's
 # model can be released instead of pinned by a live thread
 def stop_state(state: AppState) -> None:
+    if state.dream_loop is not None:
+        state.dream_loop.stop()
     state.queue.stop()
 
 

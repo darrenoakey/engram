@@ -397,9 +397,12 @@ no mocks). `./run check` runs ruff + the whole suite; pytest runs serially (one 
    consolidates, to further reduce absorbing one-off falsehoods (currently content-classification only).
 4. **Right-to-forget.** A secret absorbed into weights can't be cleanly unlearned by gradient means;
    the provenance log makes *targeted re-projection* the escape hatch, but true unlearning is unsolved.
-5. **Auto-dream scheduling.** v1's dream is manual (`/v1/brain/dream` or the UI button); wire an
-   idle/nightly trigger (`individuation.consolidate_after_dreams` is the sustained-green counter for
-   folding overlay→base).
+5. **Auto-dream scheduling — DONE.** A continuous background `DreamLoop`
+   (`individuation/dream_loop.py`, `individuation.auto_dream`) now runs the dream whenever there is
+   unconsolidated experience, and a low-speed **re-polish** (`dream.repolish`) re-trains learned facts
+   that have gone stale (`repolish_after_h`, default 48h). It is a fixed loop: work → loop immediately,
+   idle → sleep `dream_idle_sleep_s` and re-check. Off by default. Every cycle still goes through the
+   same snapshot → probe/sentinels → commit/revert gate the manual dream uses.
 6. **A faster differentiable DeltaNet scan.** The training path is an O(T) Python-unrolled loop, the
    main reason spans are capped at ≤512 tokens. A chunked parallel-scan VJP would lift that cap.
 

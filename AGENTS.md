@@ -44,3 +44,38 @@ with its research pedigree.
   the real selector. A permissive gate (`surprise_percentile` low) + gentle wake LR is the right combo.
 - Chat UI is served at `GET /` and carries the API token as an httpOnly same-origin cookie so its
   Consolidate/Prove-recall actions authenticate without exposing the secret to page JS.
+- The continuous background learner (`DreamLoop`, `individuation/dream_loop.py`, on when
+  `individuation.auto_dream`) is a second daemon thread alongside the update worker. It reuses the
+  existing atomic `dream()` for new experiences and a gentler `dream.repolish()` for stale learned
+  facts; each cycle holds/releases the update worker exactly as `brain_api._consolidate` does, so chat
+  always wins the GPU. It stops before the queue in shutdown/teardown. A failing cycle is journaled
+  `dream_loop_error` and swallowed — the loop must never die (a dead loop silently leaves noticed
+  facts unconsolidated). New journal event types: `repolish`, `repolish_reverted`, `dream_loop_error`.
+
+<!-- >>> greenline >>> -->
+## Greenline gate — how merges work here
+
+This repo is gated by **greenline**. Read `docs/greenline.md` and `docs/DOCTRINE.md`
+before writing code or tests.
+
+**Invariants (never violate):**
+- `main` == what prod runs == green, always.
+- The canonical checkout is pristine — never edit it by hand.
+- All work happens in worktrees branched from last-green.
+- Every merge goes through the serialized gate: full `check` + real `deploy`.
+
+**Your workflow:**
+1. `greenline worktree <name>` — get a worktree at `/Volumes/Gumby/worktrees/greenline/engram/<name>` on branch `gl/<name>`.
+2. Do your work there. Co-design tests + code per docs/DOCTRINE.md (parallel-safe, namespaced, no global-state assertions, OS-assigned ports; never mock other services — make real calls fast with a content-addressed record/replay cache).
+3. Commit in your worktree. Then `greenline submit` (from that worktree).
+4. The gate squash-merges, runs `./run check`, fast-forwards `main`, runs `./run deploy`, and publishes. It rolls back prod automatically if deploy fails.
+5. On success: `greenline done` to remove your worktree + branch.
+
+**Never** push directly to `main` (the pre-push hook blocks it). Never
+edit the canonical checkout. If the gate reports a conflict, rebase your worktree
+on `main` and resubmit. If commits reached `main` outside the
+gate (legacy workflow, hotfix), run `greenline adopt` to gate them in place —
+greenline never discards commits on `main`.
+
+Diagnose with `greenline status` and `greenline doctor` (`--fix` to reconcile).
+<!-- <<< greenline <<< -->

@@ -41,18 +41,22 @@ FALSE_CLAIMS = (
 # ##################################################################
 # fact probe
 # a cold-recall check: a question that should elicit a learned fact and the
-# substring that must appear in the model's answer for it to count as recalled
+# substring that must appear in the model's answer for it to count as recalled.
+# last_trained_at is the ISO timestamp of the most recent dream/re-polish that
+# re-trained this fact ("" until first learned); the re-polish sweep selects on it
 @dataclass
 class FactProbe:
     question: str
     expect: str
+    last_trained_at: str = ""
 
     def to_dict(self) -> dict:
-        return {"question": self.question, "expect": self.expect}
+        return {"question": self.question, "expect": self.expect, "last_trained_at": self.last_trained_at}
 
     @staticmethod
     def from_dict(data: dict) -> "FactProbe":
-        return FactProbe(data["question"], data["expect"])
+        # back-compat: older probe files predate last_trained_at; "" reads as stale
+        return FactProbe(data["question"], data["expect"], str(data.get("last_trained_at", "")))
 
 
 # ##################################################################
@@ -112,6 +116,29 @@ class IndividuationProbe:
     # keep only the first n probes (a reverted night drops what it just added)
     def truncate(self, n: int) -> None:
         self._write(self.all()[:n])
+
+    # ##################################################################
+    # stale
+    # probes whose last_trained_at is older than the cutoff (or empty) — the
+    # candidates a re-polish sweep re-trains to keep a learned fact fresh.
+    # Cutoff is an ISO timestamp; anything strictly older is stale. An empty
+    # last_trained_at is treated as stale so a fact learned before timestamps
+    # existed still gets refreshed once
+    def stale(self, cutoff_iso: str) -> list[FactProbe]:
+        return [p for p in self.all() if not p.last_trained_at or p.last_trained_at < cutoff_iso]
+
+    # ##################################################################
+    # touch
+    # refresh last_trained_at on the named probes (a committed re-polish marks
+    # the facts it just re-trained). A whole-file atomic rewrite mirroring
+    # mark_consolidated; unknown ids are ignored
+    def touch(self, ids: list[str], when_iso: str) -> None:
+        wanted = set(ids)
+        probes = self.all()
+        for probe in probes:
+            if probe.question in wanted:
+                probe.last_trained_at = when_iso
+        self._write(probes)
 
     # ##################################################################
     # run

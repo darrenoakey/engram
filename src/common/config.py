@@ -91,8 +91,15 @@ class IndividuationConfig:
     min_user_tokens: int = 4           # ignore trivially short user turns
     selfedit_paraphrases: int = 4      # assistant-knowledge QA paraphrases per corroborated fact
     selfedit_max_tokens: int = 256     # generation budget for a self-edit
+    atomize_max_tokens: int = 256      # generation budget to split a multi-fact turn into atoms
     dream_epochs: int = 1              # passes over each fact's QA set during a dream
     consolidate_after_dreams: int = 1  # sustained-green nights before folding to base (v1: 1)
+    auto_dream: bool = False           # a background loop runs dreams continuously when on
+    dream_idle_sleep_s: float = 60.0   # how long the loop sleeps when there is nothing to learn
+    repolish_after_h: float = 48.0     # a learned fact is re-trained once it is this many hours stale
+    repolish_min_batch: int = 1        # re-polish only fires when at least this many facts are stale
+    repolish_max_batch: int = 8        # cap facts re-trained per re-polish pass (bounds one cycle)
+    repolish_epochs: int = 1           # epochs per fact during re-polish (gentler than dream_epochs)
     probe_recall_target: float = 0.6   # individuation probe pass bar
     sentinel_entropy_ceiling: float = 6.0   # mean next-token entropy ceiling (runaway randomness)
     sentinel_entropy_floor: float = 0.3     # floor below the model's natural ~0.8; catches real collapse

@@ -136,12 +136,16 @@ def _brain_snapshot(state) -> dict:
 def _individuation_stats(state) -> dict:
     experiences = state.experience_log.all()
     unconsolidated = sum(1 for exp in experiences if not exp.consolidated)
+    auto_dream = state.config.individuation.auto_dream and state.config.individuation.enabled
+    loop = state.dream_loop.status() if (auto_dream and state.dream_loop is not None) else None
     return {
         "enabled": state.config.individuation.enabled,
         "noted": len(experiences),          # turns the surprise gate flagged (NOT yet learned)
         "learned": len(state.individuation_probe.all()),  # facts a dream consolidated + verified
         "unconsolidated": unconsolidated,   # noted but not yet run through a dream
         "surprise_threshold": state.surprise_gate.threshold(),
+        "auto_dream": auto_dream,           # is the continuous background learner on?
+        "loop": loop,                       # the loop's observable status, or None when off
     }
 
 

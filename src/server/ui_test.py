@@ -53,7 +53,36 @@ def test_root_serves_the_chat_page(server):
     assert "text/html" in response.headers["content-type"]
     body = response.text
     assert "<title>engram</title>" in body
-    assert "/v1/chat/completions" in body and "enable_thinking" in body
+    # CSS/JS are external cache-busted static assets, NOT inlined — the {{ static: }}
+    # tags must be resolved to /static/<name>?v=<hash> so a browser never serves a
+    # stale asset after a deploy (no hard-refresh ever needed)
+    assert 'href="/static/chat.css?v=' in body
+    assert 'src="/static/chat.js?v=' in body
+    assert "{{ static:" not in body          # no unresolved tags leak to the client
+    assert "<style>" not in body and "<script>\n" not in body   # nothing large inlined
+
+
+def test_static_assets_are_served_immutable_with_content_hash(server):
+    # the page references chat.js with a content-hash query string
+    body = httpx.get(f"{server.url}/", timeout=30).text
+    import re
+    match = re.search(r'/static/(chat\.js\?v=[0-9a-f]+)', body)
+    assert match, f"no cache-busted chat.js reference in page: {body[:200]}"
+    path = match.group(1)
+    asset = httpx.get(f"{server.url}/static/{path}", timeout=30)
+    assert asset.status_code == 200
+    assert "application/javascript" in asset.headers["content-type"]
+    # immutable + one year: the hash in the URL guarantees freshness, so the asset
+    # caches aggressively without ever going stale
+    cache = asset.headers.get("cache-control", "")
+    assert "max-age=31536000" in cache and "immutable" in cache
+
+
+def test_static_route_rejects_path_traversal(server):
+    # a filename with a "/" or leading "." must 404, not walk the filesystem
+    assert httpx.get(f"{server.url}/static/../chat.html", timeout=30).status_code == 404
+    assert httpx.get(f"{server.url}/static/.hidden", timeout=30).status_code == 404
+    assert httpx.get(f"{server.url}/static/nonexistent.js", timeout=30).status_code == 404
 
 
 def test_thinking_off_answers_without_a_reasoning_span(server):

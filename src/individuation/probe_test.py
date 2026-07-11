@@ -75,6 +75,44 @@ def test_truncate_drops_probes(tmp_path):
 
 
 # ##################################################################
+# last_trained_at round-trips and back-compat reads as empty
+# a probe with a timestamp persists it; a probe file predating the field reads
+# back as "" so a legacy fact is treated as stale (re-polish-eligible)
+def test_last_trained_at_roundtrip_and_backcompat(tmp_path):
+    path = tmp_path / "probes.json"
+    probes = IndividuationProbe(path)
+    probes.add(FactProbe("What is your name?", "Darren", "2026-07-08T10:00:00+00:00"))
+    reloaded = IndividuationProbe(path).all()
+    assert reloaded[0].last_trained_at == "2026-07-08T10:00:00+00:00"
+
+    # a file written before last_trained_at existed (missing key) reads as ""
+    legacy = path.parent / "legacy.json"
+    legacy.write_text('[{"question": "q", "expect": "a"}]')
+    old = IndividuationProbe(legacy).all()
+    assert old[0].last_trained_at == ""
+
+
+# ##################################################################
+# stale selects old-or-untrained, touch refreshes
+# stale() returns probes older than the cutoff (and untrained ones); touch()
+# stamps them so they drop out of the next stale() call
+def test_stale_and_touch(tmp_path):
+    path = tmp_path / "probes.json"
+    probes = IndividuationProbe(path)
+    probes.add(FactProbe("fresh question", "fresh", "2026-07-08T00:00:00+00:00"))
+    probes.add(FactProbe("stale question", "stale", "2026-06-01T00:00:00+00:00"))
+    probes.add(FactProbe("untrained question", "untrained", ""))
+
+    cutoff = "2026-07-01T00:00:00+00:00"
+    stale = IndividuationProbe(path).stale(cutoff)
+    assert {p.expect for p in stale} == {"stale", "untrained"}
+
+    IndividuationProbe(path).touch(["stale question"], "2026-07-08T12:00:00+00:00")
+    after = IndividuationProbe(path).stale(cutoff)
+    assert {p.expect for p in after} == {"untrained"}
+
+
+# ##################################################################
 # sentinels return finite health numbers
 # entropy is a finite positive value, agreement is a fraction in [0,1], and the
 # health verdict is a bool consistent with the configured ceilings

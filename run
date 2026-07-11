@@ -2,7 +2,18 @@
 # =============================================================================
 #  run — venv bootstrap facade
 #  why: guarantee an isolated, reproducible interpreter before any project code
-#  runs; all business logic lives in src/main.py, never here
+#  runs; all business logic lives in src/main.py, never here. This file forwards
+#  every subcommand to src/main.py after bootstrapping the venv:
+#
+#    ./run serve          start the engram service (loads the 9B, :8500)
+#    ./run check          full quality gate (ruff + real-model pytest) — greenline verdict
+#    ./run deploy         restart prod via `auto restart engram` + health-check — greenline deploy
+#    ./run health         read-only prod probe (no restart) — greenline health probe
+#    ./run status         GET /v1/brain, pretty-printed
+#    ./run token          print the API bearer token from the keychain
+#    ./run proof          reward-loop E2E demonstration against a running server
+#    ./run name-recall    dedicated E2E: tell it a name, fresh chat recalls it
+#    ./run family-recall  multi-fact E2E: tell it your family, fresh chat recalls each
 # =============================================================================
 import hashlib
 import os

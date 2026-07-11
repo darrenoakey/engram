@@ -18,6 +18,10 @@ EVENT_TYPES = (
     "worker_error", "consolidate_reverted",
     # individuation (INDIVIDUATION.md)
     "candidate", "experience", "dream", "dream_reverted", "individuation_probe", "sentinel",
+    # the continuous background learner (LEARNING.md §11.5)
+    "repolish", "repolish_reverted", "dream_loop_error",
+    # multi-fact turn split into atomic facts before corroboration
+    "atomize",
 )
 
 

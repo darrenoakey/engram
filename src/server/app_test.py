@@ -182,3 +182,31 @@ def _learned_state(config, work: Path):
 
 def _checkpoints(work: Path) -> Checkpoints:
     return Checkpoints(work / "ckpt", ring=20)
+
+
+# ##################################################################
+# build_state starts the dream loop when auto_dream is on, and stop_state joins it
+# the continuous background learner is a daemon thread; it must start on boot
+# when opted in and stop cleanly so no live thread pins the model after teardown
+def test_dream_loop_starts_and_stops(tmp_path):
+    config = replace(_config(), individuation=replace(load_config().individuation, enabled=True, auto_dream=True,
+                                                      dream_idle_sleep_s=0.05))
+    state = build_state(config, model_path=config.model.test_path, journal=Journal(tmp_path / "j.jsonl"),
+                        checkpoints=_checkpoints(tmp_path), replay=ReplayBuffer(tmp_path / "r.json"))
+    try:
+        assert state.dream_loop is not None
+        assert state.dream_loop.status()["running"] is True
+    finally:
+        stop_state(state)
+    assert state.dream_loop.status()["running"] is False
+
+
+# ##################################################################
+# build_state leaves the dream loop off when auto_dream is off (default)
+# the manual dream path is unchanged: no background thread when not opted in
+def test_dream_loop_off_by_default(tmp_path):
+    config = replace(_config(), individuation=replace(load_config().individuation, enabled=True, auto_dream=False))
+    state = build_state(config, model_path=config.model.test_path, journal=Journal(tmp_path / "j.jsonl"),
+                        checkpoints=_checkpoints(tmp_path), replay=ReplayBuffer(tmp_path / "r.json"))
+    stop_state(state)
+    assert state.dream_loop is None

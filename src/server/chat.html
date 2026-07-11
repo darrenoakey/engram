@@ -4,56 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>engram</title>
-<style>
-  :root {
-    --bg: #f7f7f8; --panel: #ffffff; --ink: #1a1a1f; --muted: #8a8a94;
-    --user: #2f6df6; --user-ink: #ffffff; --bot: #ececed; --line: #e3e3e7; --accent: #2f6df6;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#141417; --panel:#1c1c21; --ink:#ececf1; --muted:#8f8f9a;
-            --user:#3b7bff; --user-ink:#fff; --bot:#26262c; --line:#2c2c33; --accent:#5b8bff; }
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
-  body { background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  #app { max-width: 780px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; }
-  header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
-  header .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
-  header .pill { margin-left: auto; font-size: 12px; color: var(--muted); background: var(--panel);
-                 border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; white-space: nowrap; cursor: pointer; }
-  header .pill:hover { border-color: var(--accent); color: var(--ink); }
-  #mem { display: none; border-bottom: 1px solid var(--line); background: var(--panel); padding: 14px 18px; }
-  #mem.open { display: block; }
-  #mem h3 { margin: 0 0 4px; font-size: 13px; }
-  #mem .sub { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
-  #mem .fact { font-size: 13px; padding: 6px 0; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: baseline; }
-  #mem .fact .q { flex: 1; }
-  #mem .fact .mark { font-weight: 600; }
-  #mem .ok { color: #1f9d55; } #mem .no { color: #d64545; }
-  #mem .acts { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
-  #mem .acts button { font-size: 12px; padding: 7px 12px; border-radius: 10px; background: var(--bot); color: var(--ink); border: 1px solid var(--line); }
-  #mem .acts button.primary { background: var(--accent); color: #fff; border: 0; }
-  #mem .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
-  #log { flex: 1; overflow-y: auto; padding: 22px 18px; display: flex; flex-direction: column; gap: 14px; }
-  .row { display: flex; }
-  .row.user { justify-content: flex-end; }
-  .bubble { max-width: 82%; padding: 11px 15px; border-radius: 16px; white-space: pre-wrap; word-wrap: break-word; }
-  .user .bubble { background: var(--user); color: var(--user-ink); border-bottom-right-radius: 5px; }
-  .bot .bubble { background: var(--bot); color: var(--ink); border-bottom-left-radius: 5px; }
-  .bot .bubble.thinking { color: var(--muted); }
-  .empty { margin: auto; text-align: center; color: var(--muted); }
-  .empty h2 { font-weight: 600; color: var(--ink); margin: 0 0 6px; }
-  form { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); background: var(--bg); }
-  textarea { flex: 1; resize: none; max-height: 160px; padding: 11px 14px; border-radius: 14px;
-             border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; outline: none; }
-  textarea:focus { border-color: var(--accent); }
-  button { border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 600;
-           padding: 0 20px; border-radius: 14px; cursor: pointer; }
-  button:disabled { opacity: .45; cursor: default; }
-  .blink::after { content: "▋"; animation: b 1s steps(2) infinite; color: var(--muted); }
-  @keyframes b { 50% { opacity: 0; } }
-</style>
+<link rel="stylesheet" href="{{ static:chat.css }}">
 </head>
 <body>
 <div id="app">
@@ -65,12 +16,26 @@
   <div id="mem">
     <h3 id="memhead">Memory</h3>
     <div class="sub" id="memsub"></div>
+    <div class="bg" id="bgstatus"></div>
     <div id="facts"></div>
     <div class="acts">
       <button class="primary" id="consolidate" type="button">Consolidate what I've noticed</button>
       <button id="prove" type="button">Prove recall</button>
     </div>
     <div class="note" id="memnote">“Noticed” = flagged as worth learning. “Learned” = a consolidation absorbed it and verified it can be recalled cold.</div>
+  </div>
+  <div id="act">
+    <div class="ahd">
+      <h3>Activity</h3>
+      <span class="live" id="actlive" style="display:none"><span class="d"></span>live</span>
+      <span class="filt" id="actfilt">
+        <span data-f="all" class="on">all</span>
+        <span data-f="note">noticed</span>
+        <span data-f="train">training</span>
+        <span data-f="learn">learned</span>
+      </span>
+    </div>
+    <div class="feed" id="actfeed"></div>
   </div>
   <div id="log">
     <div class="empty" id="empty">
@@ -83,103 +48,6 @@
     <button id="send" type="submit">Send</button>
   </form>
 </div>
-<script>
-  const log = document.getElementById("log"), form = document.getElementById("form");
-  const input = document.getElementById("input"), sendBtn = document.getElementById("send");
-  const pill = document.getElementById("pill"), empty = document.getElementById("empty");
-  const messages = [];
-
-  function bubble(role, text, cls) {
-    const row = document.createElement("div"); row.className = "row " + role;
-    const b = document.createElement("div"); b.className = "bubble " + (cls || ""); b.textContent = text;
-    row.appendChild(b); log.appendChild(row); log.scrollTop = log.scrollHeight; return b;
-  }
-  function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 160) + "px"; }
-  input.addEventListener("input", autosize);
-  input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
-
-  const mem = document.getElementById("mem"), facts = document.getElementById("facts");
-  const memsub = document.getElementById("memsub");
-
-  async function refreshPill() {
-    try {
-      const b = await (await fetch("/v1/brain")).json();
-      const i = b.individuation || {};
-      pill.textContent = i.enabled ? ("🧠 " + (i.noted || 0) + " noticed · " + (i.learned || 0) + " learned") : "chat";
-    } catch (e) { pill.textContent = "offline"; }
-  }
-
-  function renderFacts(items) {
-    facts.innerHTML = "";
-    if (!items.length) { facts.innerHTML = '<div class="fact" style="color:var(--muted)">Nothing learned yet — chat, then hit “Consolidate”.</div>'; return; }
-    for (const it of items) {
-      const row = document.createElement("div"); row.className = "fact";
-      const q = document.createElement("span"); q.className = "q"; q.textContent = it.question;
-      row.appendChild(q);
-      if ("recalled" in it) { const m = document.createElement("span"); m.className = "mark " + (it.recalled ? "ok" : "no"); m.textContent = it.recalled ? "✓ recalls" : "✗ forgot"; row.appendChild(m); }
-      facts.appendChild(row);
-    }
-  }
-
-  async function loadMemory() {
-    const m = await (await fetch("/v1/brain/memory")).json();
-    memsub.textContent = m.learned.length + " learned · " + m.noted + " noticed";
-    renderFacts(m.learned);
-  }
-
-  pill.addEventListener("click", () => { mem.classList.toggle("open"); if (mem.classList.contains("open")) loadMemory(); });
-
-  async function act(btn, url, label, done) {
-    const t = btn.textContent; btn.disabled = true; btn.textContent = label;
-    try { done(await (await fetch(url, { method: "POST" })).json()); }
-    catch (e) { memsub.textContent = "error: " + e.message; }
-    finally { btn.disabled = false; btn.textContent = t; refreshPill(); }
-  }
-  document.getElementById("consolidate").addEventListener("click", e =>
-    act(e.target, "/v1/brain/dream", "consolidating…", r => {
-      memsub.textContent = r.committed ? ("learned " + r.facts_learned + " new (recall " + Math.round(r.recall * 100) + "%)") : ("nothing durable to learn (dropped " + r.dropped + ")");
-      loadMemory();
-    }));
-  document.getElementById("prove").addEventListener("click", e =>
-    act(e.target, "/v1/brain/verify", "checking…", r => {
-      memsub.textContent = "recalls " + Math.round(r.recall * 100) + "% of learned facts (live, cold)";
-      renderFacts(r.items);
-    }));
-
-  form.addEventListener("submit", async e => {
-    e.preventDefault();
-    const text = input.value.trim(); if (!text) return;
-    if (empty) empty.remove();
-    input.value = ""; autosize(); input.disabled = sendBtn.disabled = true;
-    bubble("user", text); messages.push({ role: "user", content: text });
-    const out = bubble("bot", "", "thinking blink");
-    const reply = { role: "assistant", content: "" };
-    try {
-      const res = await fetch("/v1/chat/completions", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, stream: true, enable_thinking: false, max_tokens: 1024 })
-      });
-      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const parts = buf.split("\n\n"); buf = parts.pop();
-        for (const p of parts) {
-          const line = p.trim(); if (!line.startsWith("data:")) continue;
-          const data = line.slice(5).trim(); if (data === "[DONE]") continue;
-          const delta = JSON.parse(data).choices?.[0]?.delta || {};
-          if (delta.content) { reply.content += delta.content; out.className = "bubble blink"; out.textContent = reply.content; log.scrollTop = log.scrollHeight; }
-        }
-      }
-      out.className = "bubble"; out.textContent = reply.content || "…";
-      messages.push(reply);
-    } catch (err) {
-      out.className = "bubble"; out.textContent = "⚠︎ could not reach engram: " + err.message;
-    } finally {
-      input.disabled = sendBtn.disabled = false; input.focus(); refreshPill();
-    }
-  });
-  refreshPill();
-</script>
+<script src="{{ static:chat.js }}"></script>
 </body>
 </html>

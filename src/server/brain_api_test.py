@@ -87,6 +87,9 @@ def test_brain_snapshot_has_expected_shape(server):
         assert key in data
     assert data["overlay"]["adapter_count"] > 0
     assert data["paused"]["flag"] is False
+    # the individuation section surfaces the continuous-learner status
+    ind = data["individuation"]
+    assert "auto_dream" in ind and "loop" in ind
 
 
 # ##################################################################
